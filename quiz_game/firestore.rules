@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 👤 Cho phép user đã đăng nhập đọc & ghi mọi collection của chính họ
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
