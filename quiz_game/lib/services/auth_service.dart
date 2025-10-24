@@ -10,6 +10,7 @@ class AuthService {
 
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
+  /// 🟦 Đăng ký tài khoản mới
   Future<User?> signUpWithEmail({
     required String email,
     required String password,
@@ -20,10 +21,13 @@ class AuthService {
         password: password,
       );
 
+      // 🔹 Tạo document user mặc định trong Firestore
       await _db.collection('users').doc(cred.user!.uid).set({
         'email': email.trim(),
         'displayName': '',
-        'photoUrl': '',
+        'avatarUrl': '', // ✅ đồng nhất với ProfileScreen
+        'gender': '',
+        'birthday': '',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -33,6 +37,7 @@ class AuthService {
     }
   }
 
+  /// 🟩 Đăng nhập
   Future<User?> signInWithEmail({
     required String email,
     required String password,
@@ -48,6 +53,7 @@ class AuthService {
     }
   }
 
+  /// 📨 Gửi email khôi phục mật khẩu
   Future<void> sendPasswordResetEmail(String email) async {
     try {
       await _auth.sendPasswordResetEmail(email: email.trim());
@@ -56,32 +62,36 @@ class AuthService {
     }
   }
 
+  /// 🔐 Đổi mật khẩu (khi đã đăng nhập)
   Future<void> changePassword(String newPassword) async {
     final user = _auth.currentUser;
     if (user != null) {
       await user.updatePassword(newPassword);
     } else {
-      throw Exception('Chưa đăng nhập!');
+      throw Exception('Bạn chưa đăng nhập!');
     }
   }
 
+  /// 🧍‍♂️ Cập nhật hồ sơ người dùng (tên, ảnh)
   Future<void> updateUserProfile({
     required String uid,
     String? displayName,
     File? photoFile,
   }) async {
     try {
-      String? photoUrl;
+      String? avatarUrl;
 
+      // 🖼️ Upload ảnh nếu có
       if (photoFile != null) {
         final ref = _storage.ref().child('avatars/$uid.jpg');
-        await ref.putFile(photoFile);
-        photoUrl = await ref.getDownloadURL();
+        final uploadTask = await ref.putFile(photoFile);
+        avatarUrl = await uploadTask.ref.getDownloadURL();
       }
 
+      // 🔹 Cập nhật Firestore
       await _db.collection('users').doc(uid).update({
         if (displayName != null) 'displayName': displayName,
-        if (photoUrl != null) 'photoUrl': photoUrl,
+        if (avatarUrl != null) 'avatarUrl': avatarUrl, // ✅ đúng key
         'updatedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
@@ -89,13 +99,16 @@ class AuthService {
     }
   }
 
+  /// 🔎 Lấy thông tin người dùng hiện tại
   Future<Map<String, dynamic>?> getUserProfile(String uid) async {
     final doc = await _db.collection('users').doc(uid).get();
     return doc.exists ? doc.data() : null;
   }
 
+  /// 🚪 Đăng xuất
   Future<void> signOut() async => _auth.signOut();
 
+  /// ⚠️ Chuyển lỗi Firebase sang tiếng Việt
   Exception _mapError(FirebaseAuthException e) {
     switch (e.code) {
       case 'invalid-email':
@@ -109,9 +122,9 @@ class AuthService {
       case 'email-already-in-use':
         return Exception('Email đã được sử dụng');
       case 'weak-password':
-        return Exception('Mật khẩu quá yếu (>= 6 ký tự)');
+        return Exception('Mật khẩu quá yếu (tối thiểu 6 ký tự)');
       case 'operation-not-allowed':
-        return Exception('Provider chưa được bật (hãy bật Email/Password)');
+        return Exception('Tài khoản Email/Password chưa được bật trên Firebase');
       default:
         return Exception('Lỗi: ${e.message}');
     }

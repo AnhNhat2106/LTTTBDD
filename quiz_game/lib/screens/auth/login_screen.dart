@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -14,7 +13,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _password = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _obscure = true;
-  bool _isLogin = true; // true = Login, false = SignUp
+  bool _isLogin = true;
   bool _loading = false;
 
   final _auth = AuthService();
@@ -32,16 +31,15 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       if (_isLogin) {
         await _auth.signInWithEmail(
-          email: _email.text,
-          password: _password.text,
+          email: _email.text.trim(),
+          password: _password.text.trim(),
         );
       } else {
         await _auth.signUpWithEmail(
-          email: _email.text,
-          password: _password.text,
+          email: _email.text.trim(),
+          password: _password.text.trim(),
         );
       }
-      // thành công: AuthGate tự chuyển sang HomeScreen
     } catch (e) {
       _showError(e.toString());
     } finally {
@@ -77,27 +75,36 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme;
     final title = _isLogin ? 'Đăng nhập' : 'Tạo tài khoản';
     final action = _isLogin ? 'Đăng nhập' : 'Đăng ký';
 
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(title: Text(title)),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             child: Form(
               key: _formKey,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  // 📧 Email
                   TextFormField(
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Email',
-                      prefixIcon: Icon(Icons.email),
+                      prefixIcon: const Icon(Icons.email_outlined),
+                      filled: true,
+                      fillColor: color.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) {
@@ -108,20 +115,27 @@ class _LoginScreenState extends State<LoginScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
+
+                  // 🔒 Mật khẩu
                   TextFormField(
                     controller: _password,
                     obscureText: _obscure,
                     decoration: InputDecoration(
                       labelText: 'Mật khẩu',
-                      prefixIcon: const Icon(Icons.lock),
+                      prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
-                        icon: Icon(_obscure
-                            ? Icons.visibility
-                            : Icons.visibility_off),
+                        icon: Icon(
+                          _obscure ? Icons.visibility : Icons.visibility_off,
+                        ),
                         onPressed: () => setState(() {
                           _obscure = !_obscure;
                         }),
+                      ),
+                      filled: true,
+                      fillColor: color.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                     validator: (v) {
@@ -131,18 +145,24 @@ class _LoginScreenState extends State<LoginScreen> {
                     },
                   ),
                   const SizedBox(height: 20),
+
+                  // 🔘 Nút đăng nhập / đăng ký
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _loading ? null : _submit,
                       child: _loading
                           ? const SizedBox(
-                          width: 20, height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2))
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                           : Text(action),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
+
+                  // 🔄 Quên mật khẩu + Chuyển chế độ
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -154,9 +174,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         onPressed: _loading
                             ? null
                             : () => setState(() => _isLogin = !_isLogin),
-                        child: Text(_isLogin
-                            ? 'Chưa có tài khoản? Đăng ký'
-                            : 'Đã có tài khoản? Đăng nhập'),
+                        child: Text(
+                          _isLogin
+                              ? 'Chưa có tài khoản? Đăng ký'
+                              : 'Đã có tài khoản? Đăng nhập',
+                          style: TextStyle(color: color.primary),
+                        ),
                       ),
                     ],
                   ),

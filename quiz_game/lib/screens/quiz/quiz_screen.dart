@@ -4,7 +4,7 @@ import 'result_screen.dart';
 
 class QuizScreen extends StatefulWidget {
   final String topicKey; // tên chủ đề (ví dụ: 'Lịch sử', 'CNTT')
-  final List<Map<String, dynamic>> questionList; // danh sách câu hỏi theo chủ đề
+  final List<Map<String, dynamic>> questionList; // danh sách câu hỏi
 
   const QuizScreen({
     super.key,
@@ -19,80 +19,140 @@ class QuizScreen extends StatefulWidget {
 class _QuizScreenState extends State<QuizScreen> {
   int currentIndex = 0;
   int score = 0;
+  int? selectedIndex; // Lưu lựa chọn hiện tại
+  bool isAnswered = false;
 
-  void checkAnswer(int selectedIndex) {
-    // kiểm tra đáp án đúng
-    if (selectedIndex == widget.questionList[currentIndex]['answer']) {
-      score++;
-    }
+  void checkAnswer(int index) async {
+    if (isAnswered) return; // tránh nhấn lại
 
-    // nếu chưa hết câu hỏi -> sang câu tiếp theo
+    final correctIndex = widget.questionList[currentIndex]['answer'];
+    setState(() {
+      selectedIndex = index;
+      isAnswered = true;
+      if (index == correctIndex) score++;
+    });
+
+    // chờ 1.2s rồi sang câu tiếp theo hoặc kết thúc
+    await Future.delayed(const Duration(milliseconds: 1200));
+
     if (currentIndex < widget.questionList.length - 1) {
       setState(() {
         currentIndex++;
+        isAnswered = false;
+        selectedIndex = null;
       });
     } else {
-      // hết câu hỏi -> lưu kết quả + hiển thị thông báo
-      QuizService.saveQuizResult(
+      // hết câu hỏi → lưu kết quả & chuyển sang kết quả
+      await QuizService.saveQuizResult(
         topic: widget.topicKey,
         score: score,
         total: widget.questionList.length,
       );
 
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ResultScreen(
-            topicKey: widget.topicKey,
-            score: score,
-            total: widget.questionList.length,
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ResultScreen(
+              topicKey: widget.topicKey,
+              score: score,
+              total: widget.questionList.length,
+            ),
           ),
-        ),
-      );
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme;
     final question = widget.questionList[currentIndex];
+    final total = widget.questionList.length;
+    final progress = (currentIndex + 1) / total;
 
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text("Quiz - ${widget.topicKey}"),
-        backgroundColor: Colors.purple,
+        backgroundColor: color.primary,
+        elevation: 2,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              "Câu ${currentIndex + 1}/${widget.questionList.length}",
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            // 🧭 Thanh tiến độ
+            LinearProgressIndicator(
+              value: progress,
+              color: color.primary,
+              backgroundColor: color.primary.withOpacity(.2),
+              borderRadius: BorderRadius.circular(6),
             ),
             const SizedBox(height: 20),
+
+            // 🧩 Thông tin câu hỏi
+            Text(
+              "Câu ${currentIndex + 1}/$total",
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: color.primary,
+              ),
+            ),
+            const SizedBox(height: 10),
             Text(
               question['question'],
-              style: const TextStyle(fontSize: 20),
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+                fontSize: 20,
+              ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 25),
+
+            // 🔘 Các lựa chọn
             ...List.generate(question['options'].length, (index) {
+              final optionText = question['options'][index];
+              final correctIndex = question['answer'];
+              Color? btnColor;
+
+              // nếu đã chọn → đổi màu theo đúng/sai
+              if (isAnswered) {
+                if (index == correctIndex) {
+                  btnColor = Colors.green.shade400;
+                } else if (index == selectedIndex && selectedIndex != correctIndex) {
+                  btnColor = Colors.red.shade400;
+                } else {
+                  btnColor = theme.brightness == Brightness.dark
+                      ? color.surface
+                      : Colors.grey.shade200;
+                }
+              } else {
+                btnColor = theme.brightness == Brightness.dark
+                    ? color.surface
+                    : color.secondary.withOpacity(.1);
+              }
+
               return Container(
-                margin: const EdgeInsets.only(bottom: 10),
+                margin: const EdgeInsets.only(bottom: 12),
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple.shade100,
-                    foregroundColor: Colors.purple.shade900,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    backgroundColor: btnColor,
+                    foregroundColor: theme.brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black87,
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                     ),
+                    elevation: 2,
                   ),
                   onPressed: () => checkAnswer(index),
                   child: Text(
-                    question['options'][index],
+                    optionText,
                     textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                 ),
               );

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import '../../providers/theme_provider.dart';
 import '../quiz/topic_screen.dart';
 import '../quiz/history_screen.dart';
 import '../../services/auth_service.dart';
@@ -12,13 +14,27 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final theme = Theme.of(context);
+    final color = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: Colors.purple.shade50,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Trang chủ'),
-        backgroundColor: Colors.purple,
+        backgroundColor: color.primary,
         actions: [
+          // 🌗 Nút chuyển giao diện
+          IconButton(
+            icon: Icon(
+              context.read<ThemeProvider>().isDark
+                  ? Icons.wb_sunny
+                  : Icons.nightlight_round,
+            ),
+            tooltip: 'Chuyển giao diện sáng/tối',
+            onPressed: () => context.read<ThemeProvider>().toggleTheme(),
+          ),
+
+          // 👤 Nút hồ sơ
           IconButton(
             tooltip: 'Trang cá nhân',
             icon: const Icon(Icons.person),
@@ -29,6 +45,8 @@ class HomeScreen extends StatelessWidget {
               );
             },
           ),
+
+          // 🚪 Nút đăng xuất
           IconButton(
             tooltip: 'Đăng xuất',
             icon: const Icon(Icons.logout),
@@ -39,7 +57,6 @@ class HomeScreen extends StatelessWidget {
         ],
       ),
 
-      // 🧠 Hiển thị avatar + biệt danh bằng Firestore Stream
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
@@ -52,7 +69,8 @@ class HomeScreen extends StatelessWidget {
 
           final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
           final avatarUrl = data['avatarUrl'] ?? '';
-          final displayName = data['displayName'] ?? user?.email ?? '(Người dùng)';
+          final displayName =
+              data['displayName'] ?? user?.email ?? '(Người dùng)';
 
           return Center(
             child: Column(
@@ -71,26 +89,15 @@ class HomeScreen extends StatelessWidget {
                 // 👋 Biệt danh hoặc email
                 Text(
                   'Xin chào, $displayName',
-                  style: const TextStyle(
-                    fontSize: 18,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: color.primary,
                     fontWeight: FontWeight.bold,
-                    color: Colors.purple,
                   ),
                 ),
                 const SizedBox(height: 40),
 
                 // ▶️ Nút bắt đầu quiz
                 ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    elevation: 5,
-                  ),
                   onPressed: () {
                     Navigator.push(
                       context,
@@ -105,19 +112,10 @@ class HomeScreen extends StatelessWidget {
 
                 // ⏳ Nút xem lịch sử
                 OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    side:
-                    BorderSide(color: Colors.purple.shade200, width: 2),
-                  ),
                   onPressed: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => HistoryScreen()),
+                      MaterialPageRoute(builder: (_) => const HistoryScreen()),
                     );
                   },
                   icon: const Icon(Icons.history),

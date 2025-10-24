@@ -9,11 +9,15 @@ class HistoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
+    final theme = Theme.of(context);
+    final color = theme.colorScheme;
 
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Lịch sử Quiz'),
-        backgroundColor: Colors.purple,
+        backgroundColor: color.primary,
+        elevation: 2,
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
@@ -26,7 +30,16 @@ class HistoryScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (!snap.hasData || snap.data!.docs.isEmpty) {
-            return const Center(child: Text('Chưa có kết quả nào'));
+            return Center(
+              child: Text(
+                'Chưa có kết quả nào',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.brightness == Brightness.dark
+                      ? Colors.white70
+                      : Colors.black54,
+                ),
+              ),
+            );
           }
 
           final docs = snap.data!.docs;
@@ -64,13 +77,13 @@ class HistoryScreen extends StatelessWidget {
   }
 }
 
-/// 3 mức đánh giá để tô màu và text
+/// 3 mức đánh giá
 enum _Status { good, medium, bad }
 
 _Status _statusFromRatio(double r) {
-  if (r >= 0.8) return _Status.good;   // ≥ 80%: Giỏi
-  if (r >= 0.5) return _Status.medium; // 50–79%: Khá
-  return _Status.bad;                  // < 50%: Cần cố gắng
+  if (r >= 0.8) return _Status.good;
+  if (r >= 0.5) return _Status.medium;
+  return _Status.bad;
 }
 
 class _ResultTile extends StatelessWidget {
@@ -90,10 +103,13 @@ class _ResultTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color = switch (status) {
-      _Status.good => Colors.green,
-      _Status.medium => Colors.orange,
-      _Status.bad => Colors.red,
+    final theme = Theme.of(context);
+    final color = theme.colorScheme;
+
+    final Color statusColor = switch (status) {
+      _Status.good => Colors.greenAccent.shade400,
+      _Status.medium => Colors.amber.shade400,
+      _Status.bad => Colors.redAccent.shade200,
     };
 
     final String statusText = switch (status) {
@@ -103,33 +119,53 @@ class _ResultTile extends StatelessWidget {
     };
 
     return Card(
+      color: color.surface,
       elevation: 3,
-      shadowColor: color.withOpacity(.3),
+      shadowColor: statusColor.withOpacity(.3),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           gradient: LinearGradient(
-            colors: [color.withOpacity(.08), Colors.white],
+            colors: [
+              statusColor.withOpacity(.06),
+              theme.brightness == Brightness.dark
+                  ? color.surface.withOpacity(.9)
+                  : Colors.white,
+            ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
         ),
         child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          leading: _ScoreBadge(score: score, total: total, color: color),
+          contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          leading: _ScoreBadge(score: score, total: total, color: statusColor),
           title: Text(
             'Chủ đề: $topic',
-            style: const TextStyle(fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: theme.brightness == Brightness.dark
+                  ? Colors.white
+                  : Colors.black87,
+            ),
           ),
           subtitle: Text(
             'Điểm: $score/$total · ${time != null ? DateFormat('dd/MM/yyyy HH:mm').format(time!) : 'Không rõ thời gian'}',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.brightness == Brightness.dark
+                  ? Colors.white70
+                  : Colors.black54,
+            ),
           ),
           trailing: Chip(
             label: Text(statusText),
-            backgroundColor: color.withOpacity(.12),
-            labelStyle: TextStyle(color: color, fontWeight: FontWeight.w600),
-            side: BorderSide(color: color.withOpacity(.3)),
+            backgroundColor: statusColor.withOpacity(.12),
+            labelStyle: TextStyle(
+              color: statusColor,
+              fontWeight: FontWeight.w600,
+            ),
+            side: BorderSide(color: statusColor.withOpacity(.3)),
           ),
         ),
       ),
@@ -155,15 +191,26 @@ class _ScoreBadge extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: LinearGradient(
-          colors: [color, color.withOpacity(.75)],
+          colors: [color, color.withOpacity(.8)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(.4),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       alignment: Alignment.center,
       child: Text(
         '$score/$total',
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+        ),
       ),
     );
   }

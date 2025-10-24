@@ -55,23 +55,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final ref = FirebaseStorage.instance.ref().child('avatars/${user.uid}.jpg');
       final uploadTask = ref.putFile(file);
-
-      // Theo dõi tiến trình
       uploadTask.snapshotEvents.listen((event) {
         final total = event.totalBytes == 0 ? 1 : event.totalBytes;
         setState(() => _uploadProgress = event.bytesTransferred / total);
       });
-
       await uploadTask.whenComplete(() {});
-      final url = await ref.getDownloadURL();
-      print('✅ Upload thành công: $url');
-      return url;
+      return await ref.getDownloadURL();
     } catch (e) {
-      print('❌ Lỗi upload: $e');
+      debugPrint('❌ Lỗi upload: $e');
       return null;
     }
   }
-
 
   Future<void> _save() async {
     FocusScope.of(context).unfocus();
@@ -90,7 +84,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã lưu hồ sơ')),
+        const SnackBar(content: Text('Đã lưu hồ sơ thành công')),
       );
     }
   }
@@ -132,9 +126,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme;
+
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -145,15 +143,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         : const AssetImage('assets/avatar_placeholder.png') as ImageProvider);
 
     return Scaffold(
-      backgroundColor: Colors.purple.shade50,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Hồ sơ cá nhân'),
-        backgroundColor: Colors.purple,
+        backgroundColor: color.primary,
+        elevation: 2,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           children: [
+            // 🖼 Ảnh đại diện + nút chỉnh sửa
             Stack(
               alignment: Alignment.bottomRight,
               children: [
@@ -162,8 +162,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   bottom: 4,
                   right: 4,
                   child: FloatingActionButton.small(
-                    heroTag: 'edit_avatar',
-                    backgroundColor: Colors.purple,
+                    heroTag: null,
+                    backgroundColor: color.primary,
                     onPressed: _pickImage,
                     child: const Icon(Icons.edit, color: Colors.white),
                   ),
@@ -175,18 +175,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 padding: const EdgeInsets.only(top: 8),
                 child: LinearProgressIndicator(value: _uploadProgress),
               ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
+            // 🧾 Biệt danh
             TextField(
               controller: _name,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Biệt danh (hiển thị)',
-                prefixIcon: Icon(Icons.badge),
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.badge_outlined),
+                filled: true,
+                fillColor: color.surface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
             const SizedBox(height: 12),
 
+            // 🚻 Giới tính
             DropdownButtonFormField<String>(
               value: _gender.isEmpty ? null : _gender,
               items: const [
@@ -195,41 +201,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 DropdownMenuItem(value: 'Khác', child: Text('Khác')),
               ],
               onChanged: (v) => setState(() => _gender = v ?? ''),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Giới tính',
-                prefixIcon: Icon(Icons.wc),
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.wc_outlined),
+                filled: true,
+                fillColor: color.surface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
             const SizedBox(height: 12),
 
+            // 🎂 Ngày sinh
             TextField(
               controller: _birthday,
               readOnly: true,
               onTap: _pickDate,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Ngày sinh (dd/MM/yyyy)',
-                prefixIcon: Icon(Icons.cake),
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.cake_outlined),
+                filled: true,
+                fillColor: color.surface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
             const SizedBox(height: 20),
 
-            ElevatedButton.icon(
-              icon: const Icon(Icons.save),
-              label: const Text('Lưu thay đổi'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple,
-                minimumSize: const Size.fromHeight(48),
+            // 💾 Nút lưu thay đổi
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.save_outlined),
+                label: const Text('Lưu thay đổi'),
+                onPressed: _save,
               ),
-              onPressed: _save,
             ),
             const SizedBox(height: 12),
 
-            OutlinedButton.icon(
-              icon: const Icon(Icons.lock_reset),
-              label: const Text('Gửi email đổi mật khẩu'),
-              onPressed: _sendResetEmail,
+            // 🔐 Nút đổi mật khẩu
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.lock_reset_outlined),
+                label: const Text('Gửi email đổi mật khẩu'),
+                onPressed: _sendResetEmail,
+              ),
             ),
           ],
         ),
