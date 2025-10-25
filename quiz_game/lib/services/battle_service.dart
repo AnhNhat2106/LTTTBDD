@@ -8,7 +8,7 @@ class BattleService {
   final _db = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
-  /// Tạo phòng chờ theo topic. Trả về roomId.
+  /// 🔹 Tạo phòng chờ theo topic
   Future<String> createRoom({required String topic}) async {
     final u = _auth.currentUser!;
     final doc = await _db.collection('rooms').add({
@@ -21,16 +21,18 @@ class BattleService {
         'displayName': u.displayName ?? '',
       },
       'player2': null,
-      'scores': {}, // {uid: int}
+      'scores': {}, // {uid: {'score': x, 'total': y}}
       'startedAt': null,
       'finishedAt': null,
+      'finalized': false,
     });
     return doc.id;
   }
 
-  /// Tìm phòng còn đang waiting cùng topic để join. Nếu không có -> tạo mới.
+  /// 🔹 Ghép phòng tự động
   Future<String> autoMatchOrCreate({required String topic}) async {
-    final waiting = await _db.collection('rooms')
+    final waiting = await _db
+        .collection('rooms')
         .where('topic', isEqualTo: topic)
         .where('status', isEqualTo: 'waiting')
         .orderBy('createdAt')
@@ -46,23 +48,18 @@ class BattleService {
     }
   }
 
-  /// Vào phòng đang waiting (làm player2) và đổi status thành playing.
+  /// 🔹 Người thứ hai vào phòng
   Future<void> joinRoom(String roomId) async {
     final u = _auth.currentUser!;
     final ref = _db.collection('rooms').doc(roomId);
 
     await _db.runTransaction((tx) async {
       final snap = await tx.get(ref);
-      if (!snap.exists) {
-        throw Exception('Phòng không tồn tại');
-      }
+      if (!snap.exists) throw Exception('Phòng không tồn tại');
       final data = snap.data()!;
-      if (data['status'] != 'waiting') {
-        throw Exception('Phòng đã bắt đầu/đóng');
-      }
-      if (data['player2'] != null) {
-        throw Exception('Phòng đã đủ người');
-      }
+      if (data['status'] != 'waiting') throw Exception('Phòng đã bắt đầu');
+      if (data['player2'] != null) throw Exception('Phòng đã đủ người');
+
       tx.update(ref, {
         'player2': {
           'uid': u.uid,
@@ -75,12 +72,12 @@ class BattleService {
     });
   }
 
-  /// Lắng nghe realtime một phòng
+  /// 🔹 Lắng nghe thay đổi phòng
   Stream<DocumentSnapshot<Map<String, dynamic>>> watchRoom(String roomId) {
     return _db.collection('rooms').doc(roomId).snapshots();
   }
 
-  /// Nộp điểm của mình sau khi làm xong
+  /// 🔹 Nộp điểm của mình
   Future<void> submitMyScore({
     required String roomId,
     required int score,
@@ -94,27 +91,30 @@ class BattleService {
       if (!snap.exists) return;
       final data = snap.data()!;
 
+      // Lấy dữ liệu điểm cũ (nếu có)
       final scores = Map<String, dynamic>.from(data['scores'] ?? {});
       scores[u.uid] = {'score': score, 'total': total};
 
       tx.update(ref, {'scores': scores});
 
-      // Nếu cả 2 người đã nộp điểm -> kết thúc phòng
       final p1 = (data['player1'] as Map?)?['uid'];
       final p2 = (data['player2'] as Map?)?['uid'];
       final haveP1 = p1 != null && scores[p1] != null;
       final haveP2 = p2 != null && scores[p2] != null;
 
+      // ✅ Nếu cả 2 đã có điểm -> kết thúc phòng
       if (haveP1 && haveP2) {
         tx.update(ref, {
           'status': 'finished',
           'finishedAt': FieldValue.serverTimestamp(),
         });
       }
+    }).catchError((e) {
+      print('❌ Lỗi submitMyScore: $e');
     });
   }
 
-  /// Khi phòng finished, ghi kết quả vào battle_results + cập nhật rank users
+  /// 🔹 Tổng kết trận đấu và cộng/trừ Rank
   Future<void> finalizeAndRank(String roomId) async {
     final ref = _db.collection('rooms').doc(roomId);
     final room = await ref.get();
@@ -122,6 +122,7 @@ class BattleService {
 
     final data = room.data()!;
     if (data['status'] != 'finished') return;
+    if (data['finalized'] == true) return; // tránh trùng xử lý
 
     final topic = data['topic'];
     final p1 = (data['player1'] as Map?)?['uid'];
@@ -145,29 +146,24 @@ class BattleService {
       result = 'p2_win';
     }
 
-    // lưu battle_results
+    // Lưu lịch sử trận đấu
     await _db.collection('battle_results').add({
       'roomId': roomId,
       'topic': topic,
       'p1': {'uid': p1, 'score': s1, 'total': t1},
       'p2': {'uid': p2, 'score': s2, 'total': t2},
       'winnerUid': winner,
-      'result': result, // p1_win | p2_win | draw
+      'result': result,
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    // cộng/trừ rank
+    // Cộng/trừ Rank
     final p1Ref = _db.collection('users').doc(p1);
     final p2Ref = _db.collection('users').doc(p2);
 
     if (winner == null) {
-      // hoà: +2 cả 2
-      await p1Ref.update({
-        'rankPoints': FieldValue.increment(2),
-      });
-      await p2Ref.update({
-        'rankPoints': FieldValue.increment(2),
-      });
+      await p1Ref.update({'rankPoints': FieldValue.increment(2)});
+      await p2Ref.update({'rankPoints': FieldValue.increment(2)});
     } else if (winner == p1) {
       await p1Ref.update({
         'rankPoints': FieldValue.increment(10),
@@ -187,5 +183,7 @@ class BattleService {
         'losses': FieldValue.increment(1),
       });
     }
+
+    await ref.update({'finalized': true}); // ✅ đánh dấu đã xử lý
   }
 }

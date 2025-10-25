@@ -52,7 +52,6 @@ class _BattleQuizScreenState extends State<BattleQuizScreen> {
   @override
   Widget build(BuildContext context) {
     final q = widget.questionList[currentIndex];
-
     return Scaffold(
       appBar: AppBar(title: Text('PvP - ${widget.topicKey}')),
       body: Padding(
@@ -69,7 +68,7 @@ class _BattleQuizScreenState extends State<BattleQuizScreen> {
               return Container(
                 margin: const EdgeInsets.only(bottom: 10),
                 child: ElevatedButton(
-                  onPressed: _answer == null ? null : () => _answer(i),
+                  onPressed: () => _answer(i),
                   child: Text(q['options'][i]),
                 ),
               );
@@ -95,6 +94,7 @@ class _WaitingResultScreen extends StatelessWidget {
             body: Center(child: CircularProgressIndicator()),
           );
         }
+
         final data = (snap.data! as dynamic).data();
         if (data == null) {
           return const Scaffold(body: Center(child: Text('Phòng không tồn tại')));
@@ -103,12 +103,15 @@ class _WaitingResultScreen extends StatelessWidget {
         final status = data['status'] as String? ?? 'waiting';
         if (status != 'finished') {
           return const Scaffold(
-            body: Center(child: Text('Chờ đối thủ hoàn thành...')),
+            body: Center(child: Text('⏳ Chờ đối thủ hoàn thành...')),
           );
         }
 
-        // phòng đã finished -> finalize + show result
-        BattleService.instance.finalizeAndRank(roomId); // fire-and-forget
+        // ✅ Tránh xử lý trùng
+        if (data['finalized'] != true) {
+          BattleService.instance.finalizeAndRank(roomId);
+        }
+
         final scores = Map<String, dynamic>.from(data['scores'] ?? {});
         final p1 = (data['player1'] as Map?)?['uid'];
         final p2 = (data['player2'] as Map?)?['uid'];
@@ -118,9 +121,9 @@ class _WaitingResultScreen extends StatelessWidget {
         final s2 = p2 != null ? (scores[p2]?['score'] ?? 0) : 0;
         final t2 = p2 != null ? (scores[p2]?['total'] ?? 0) : 0;
 
-        String label = 'Hoà!';
-        if (s1 > s2) label = 'Người chơi 1 thắng!';
-        if (s2 > s1) label = 'Người chơi 2 thắng!';
+        String label = '🎯 Hoà!';
+        if (s1 > s2) label = '🏆 Người chơi 1 thắng!';
+        if (s2 > s1) label = '🏆 Người chơi 2 thắng!';
 
         return Scaffold(
           appBar: AppBar(title: const Text('Kết quả PvP')),
@@ -130,14 +133,17 @@ class _WaitingResultScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(label, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text(label,
+                      style: const TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
-                  Text('P1: $s1 / $t1'),
-                  Text('P2: $s2 / $t2'),
+                  Text('Người chơi 1: $s1 / $t1'),
+                  Text('Người chơi 2: $s2 / $t2'),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () => Navigator.popUntil(context, (r) => r.isFirst),
-                    child: const Text('Về Trang chủ'),
+                    onPressed: () =>
+                        Navigator.popUntil(context, (r) => r.isFirst),
+                    child: const Text('🏠 Về Trang chủ'),
                   ),
                 ],
               ),

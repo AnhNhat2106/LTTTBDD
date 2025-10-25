@@ -9,8 +9,6 @@ import '../../services/auth_service.dart';
 import '../profile/profile_screen.dart';
 import '../rank/rank_screen.dart';
 import '../rank/duel_screen.dart';
-
-// 🕓 Màn hình chọn loại lịch sử (menu)
 import '../history/history_menu_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -28,7 +26,7 @@ class HomeScreen extends StatelessWidget {
         title: const Text('Trang chủ'),
         backgroundColor: color.primary,
         actions: [
-          // 🌗 Nút chuyển giao diện
+          // 🌗 Chuyển giao diện sáng/tối
           IconButton(
             icon: Icon(
               context.read<ThemeProvider>().isDark
@@ -39,7 +37,7 @@ class HomeScreen extends StatelessWidget {
             onPressed: () => context.read<ThemeProvider>().toggleTheme(),
           ),
 
-          // 👤 Nút hồ sơ
+          // 👤 Hồ sơ cá nhân
           IconButton(
             tooltip: 'Trang cá nhân',
             icon: const Icon(Icons.person),
@@ -51,7 +49,7 @@ class HomeScreen extends StatelessWidget {
             },
           ),
 
-          // 🚪 Nút đăng xuất
+          // 🚪 Đăng xuất
           IconButton(
             tooltip: 'Đăng xuất',
             icon: const Icon(Icons.logout),
@@ -112,10 +110,13 @@ class HomeScreen extends StatelessWidget {
                     color: color.surface,
                     elevation: 3,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
@@ -129,68 +130,83 @@ class HomeScreen extends StatelessWidget {
                   const SizedBox(height: 32),
 
                   // ▶️ Luyện tập quiz
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 48),
+                  Builder(
+                    builder: (context) => ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const TopicScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Luyện tập Quiz'),
                     ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const TopicScreen()),
-                      );
-                    },
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('Luyện tập Quiz'),
                   ),
                   const SizedBox(height: 16),
 
                   // ⚔️ Thi đấu xếp hạng
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orangeAccent,
-                      minimumSize: const Size(double.infinity, 48),
+                  Builder(
+                    builder: (context) => ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orangeAccent,
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const DuelScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.sports_esports),
+                      label: const Text('Thi đấu xếp hạng'),
                     ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const DuelScreen()),
-                      );
-                    },
-                    icon: const Icon(Icons.sports_esports),
-                    label: const Text('Thi đấu xếp hạng'),
                   ),
                   const SizedBox(height: 16),
 
                   // 🏆 Bảng xếp hạng
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 48),
+                  Builder(
+                    builder: (context) => OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const RankScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.leaderboard),
+                      label: const Text('Bảng xếp hạng'),
                     ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const RankScreen()),
-                      );
-                    },
-                    icon: const Icon(Icons.leaderboard),
-                    label: const Text('Bảng xếp hạng'),
                   ),
                   const SizedBox(height: 16),
 
-                  // 📜 Lịch sử Quiz (Menu chọn loại)
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 48),
+                  // 📜 Lịch sử Quiz (menu chọn loại)
+                  Builder(
+                    builder: (context) => OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const HistoryMenuScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.history),
+                      label: const Text('Lịch sử Quiz'),
                     ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const HistoryMenuScreen()),
-                      );
-                    },
-                    icon: const Icon(Icons.history),
-                    label: const Text('Lịch sử Quiz'),
                   ),
                 ],
               ),
@@ -201,7 +217,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // Widget hiển thị thống kê Rank nhỏ
+  // 🔹 Widget hiển thị thống kê Rank nhỏ
   Widget _rankStat(String label, String value, IconData icon) {
     return Column(
       children: [
