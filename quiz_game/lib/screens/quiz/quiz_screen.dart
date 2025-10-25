@@ -19,11 +19,11 @@ class QuizScreen extends StatefulWidget {
 class _QuizScreenState extends State<QuizScreen> {
   int currentIndex = 0;
   int score = 0;
-  int? selectedIndex; // Lưu lựa chọn hiện tại
+  int? selectedIndex;
   bool isAnswered = false;
 
   void checkAnswer(int index) async {
-    if (isAnswered) return; // tránh nhấn lại
+    if (isAnswered) return;
 
     final correctIndex = widget.questionList[currentIndex]['answer'];
     setState(() {
@@ -32,7 +32,6 @@ class _QuizScreenState extends State<QuizScreen> {
       if (index == correctIndex) score++;
     });
 
-    // chờ 1.2s rồi sang câu tiếp theo hoặc kết thúc
     await Future.delayed(const Duration(milliseconds: 1200));
 
     if (currentIndex < widget.questionList.length - 1) {
@@ -42,13 +41,19 @@ class _QuizScreenState extends State<QuizScreen> {
         selectedIndex = null;
       });
     } else {
-      // hết câu hỏi → lưu kết quả & chuyển sang kết quả
+      // ✅ Lưu kết quả (chỉ dành cho chế độ luyện tập)
       await QuizService.saveQuizResult(
         topic: widget.topicKey,
         score: score,
         total: widget.questionList.length,
       );
 
+      // ✅ Trả điểm về cho DuelScreen (PvP)
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context, score);
+      }
+
+      // ✅ Hiển thị màn hình kết quả cá nhân
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -117,7 +122,6 @@ class _QuizScreenState extends State<QuizScreen> {
               final correctIndex = question['answer'];
               Color? btnColor;
 
-              // nếu đã chọn → đổi màu theo đúng/sai
               if (isAnswered) {
                 if (index == correctIndex) {
                   btnColor = Colors.green.shade400;
