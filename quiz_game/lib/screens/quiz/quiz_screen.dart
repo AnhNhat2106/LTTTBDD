@@ -6,11 +6,13 @@ import 'result_screen.dart';
 class QuizScreen extends StatefulWidget {
   final String topicKey; // tên chủ đề (ví dụ: 'Lịch sử', 'CNTT')
   final List<Map<String, dynamic>> questionList; // danh sách câu hỏi
+  final bool isDuel; // true nếu chơi PvP, false nếu luyện tập
 
   const QuizScreen({
     super.key,
     required this.topicKey,
     required this.questionList,
+    this.isDuel = false,
   });
 
   @override
@@ -18,13 +20,15 @@ class QuizScreen extends StatefulWidget {
 }
 
 class _QuizScreenState extends State<QuizScreen> {
+  static const int perQuestionSeconds = 15;
+
   int currentIndex = 0;
   int score = 0;
   int? selectedIndex;
   bool isAnswered = false;
 
-  late Timer _timer;
-  int timeLeft = 10; // ⏱ số giây cho mỗi câu
+  int remain = perQuestionSeconds;
+  Timer? _timer;
 
   @override
   void initState() {
@@ -32,14 +36,36 @@ class _QuizScreenState extends State<QuizScreen> {
     _startTimer();
   }
 
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
   void _startTimer() {
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (timeLeft > 0) {
-        setState(() => timeLeft--);
+    _timer?.cancel();
+    setState(() => remain = perQuestionSeconds);
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) return;
+      if (remain <= 1) {
+        t.cancel();
+        // hết giờ mà chưa trả lời -> chuyển câu, không cộng điểm
+        _autoNextWhenTimeout();
       } else {
-        _nextQuestion(autoSkip: true);
+        setState(() => remain--);
       }
     });
+  }
+
+  Future<void> _autoNextWhenTimeout() async {
+    if (!isAnswered) {
+      setState(() {
+        isAnswered = true;
+        selectedIndex = null; // không chọn
+      });
+      await Future.delayed(const Duration(milliseconds: 600));
+    }
+    _goNextOrFinish();
   }
 
   void checkAnswer(int index) async {
@@ -52,35 +78,37 @@ class _QuizScreenState extends State<QuizScreen> {
       if (index == correctIndex) score++;
     });
 
-    await Future.delayed(const Duration(milliseconds: 1000));
-    _nextQuestion();
+    await Future.delayed(const Duration(milliseconds: 900));
+    _goNextOrFinish();
   }
 
-  void _nextQuestion({bool autoSkip = false}) async {
-    _timer.cancel();
-
+  Future<void> _goNextOrFinish() async {
     if (currentIndex < widget.questionList.length - 1) {
       setState(() {
         currentIndex++;
         isAnswered = false;
         selectedIndex = null;
-        timeLeft = 10; // reset timer cho câu mới
       });
       _startTimer();
     } else {
-      // ✅ Lưu kết quả (chế độ luyện tập)
-      await QuizService.saveQuizResult(
-        topic: widget.topicKey,
-        score: score,
-        total: widget.questionList.length,
-      );
+      _timer?.cancel();
 
-      // ✅ Trả điểm về DuelScreen nếu có (PvP)
-      if (Navigator.canPop(context)) {
-        Navigator.pop(context, score);
+      // PvE: lưu lịch sử
+      if (!widget.isDuel) {
+        await QuizService.saveQuizResult(
+          topic: widget.topicKey,
+          score: score,
+          total: widget.questionList.length,
+        );
       }
 
-      // ✅ Hiển thị kết quả cá nhân
+      // Trả điểm về cho màn hình gọi (Duel)
+      if (widget.isDuel) {
+        if (mounted) Navigator.pop(context, score);
+        return;
+      }
+
+      // Hiển thị màn hình kết quả cá nhân
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -97,12 +125,6 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   @override
-  void dispose() {
-    _timer.cancel();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = theme.colorScheme;
@@ -110,50 +132,47 @@ class _QuizScreenState extends State<QuizScreen> {
     final total = widget.questionList.length;
     final progress = (currentIndex + 1) / total;
 
+    final correctIndex = question['answer'];
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text("Quiz - ${widget.topicKey}"),
         backgroundColor: color.primary,
         elevation: 2,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Center(
+              child: Row(
+                children: [
+                  const Icon(Icons.timer, size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                    '$remain s',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          )
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 🧭 Tiến độ câu hỏi
+            // Thanh tiến độ
             LinearProgressIndicator(
               value: progress,
               color: color.primary,
               backgroundColor: color.primary.withOpacity(.2),
               borderRadius: BorderRadius.circular(6),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 16),
 
-            // ⏳ Thanh thời gian đếm ngược
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                LinearProgressIndicator(
-                  value: timeLeft / 10,
-                  minHeight: 10,
-                  color: timeLeft > 3 ? Colors.green : Colors.red,
-                  backgroundColor: Colors.grey.shade300,
-                ),
-                Text(
-                  "$timeLeft giây",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: timeLeft > 3 ? Colors.black : Colors.redAccent,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-
-            // 🧩 Thông tin câu hỏi
+            // Câu số
             Text(
               "Câu ${currentIndex + 1}/$total",
               style: theme.textTheme.titleMedium?.copyWith(
@@ -163,6 +182,7 @@ class _QuizScreenState extends State<QuizScreen> {
             ),
             const SizedBox(height: 10),
 
+            // Nội dung câu hỏi
             Text(
               question['question'],
               style: theme.textTheme.titleLarge?.copyWith(
@@ -170,12 +190,11 @@ class _QuizScreenState extends State<QuizScreen> {
                 fontSize: 20,
               ),
             ),
-            const SizedBox(height: 25),
+            const SizedBox(height: 22),
 
-            // 🔘 Các lựa chọn
+            // Các lựa chọn
             ...List.generate(question['options'].length, (index) {
               final optionText = question['options'][index];
-              final correctIndex = question['answer'];
               Color? btnColor;
 
               if (isAnswered) {
@@ -202,7 +221,7 @@ class _QuizScreenState extends State<QuizScreen> {
                     foregroundColor: theme.brightness == Brightness.dark
                         ? Colors.white
                         : Colors.black87,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
