@@ -8,6 +8,11 @@ import '../quiz/history_screen.dart';
 import '../../services/auth_service.dart';
 import '../profile/profile_screen.dart';
 
+// 🏆 Màn hình bảng xếp hạng (sẽ tạo sau)
+import '../rank/rank_screen.dart';
+// ⚔️ Màn hình thi đấu (sẽ tạo sau)
+import '../rank/duel_screen.dart';
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -71,61 +76,147 @@ class HomeScreen extends StatelessWidget {
           final avatarUrl = data['avatarUrl'] ?? '';
           final displayName =
               data['displayName'] ?? user?.email ?? '(Người dùng)';
+          final rankPoints = (data['rankPoints'] ?? 0).toInt();
+          final wins = (data['wins'] ?? 0).toInt();
+          final losses = (data['losses'] ?? 0).toInt();
 
           return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // 🧍‍♂️ Avatar
-                CircleAvatar(
-                  radius: 45,
-                  backgroundImage: avatarUrl.isNotEmpty
-                      ? NetworkImage(avatarUrl)
-                      : const AssetImage('assets/avatar_placeholder.png')
-                  as ImageProvider,
-                ),
-                const SizedBox(height: 12),
-
-                // 👋 Biệt danh hoặc email
-                Text(
-                  'Xin chào, $displayName',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: color.primary,
-                    fontWeight: FontWeight.bold,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // 🧍‍♂️ Avatar
+                  CircleAvatar(
+                    radius: 45,
+                    backgroundImage: avatarUrl.isNotEmpty
+                        ? NetworkImage(avatarUrl)
+                        : const AssetImage('assets/avatar_placeholder.png')
+                    as ImageProvider,
                   ),
-                ),
-                const SizedBox(height: 40),
+                  const SizedBox(height: 12),
 
-                // ▶️ Nút bắt đầu quiz
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const TopicScreen()),
-                    );
-                  },
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Bắt đầu chơi Quiz'),
-                ),
+                  // 👋 Lời chào
+                  Text(
+                    'Xin chào, $displayName',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: color.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
 
-                const SizedBox(height: 20),
+                  // 🏅 Rank info
+                  Card(
+                    color: color.surface,
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _rankStat('Điểm Rank', '$rankPoints', Icons.star),
+                          _rankStat('Thắng', '$wins', Icons.check_circle),
+                          _rankStat('Thua', '$losses', Icons.cancel),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
 
-                // ⏳ Nút xem lịch sử
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const HistoryScreen()),
-                    );
-                  },
-                  icon: const Icon(Icons.history),
-                  label: const Text('Xem lịch sử Quiz'),
-                ),
-              ],
+                  // ▶️ Nút luyện tập quiz
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const TopicScreen()),
+                      );
+                    },
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Luyện tập Quiz'),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ⚔️ Thi đấu xếp hạng
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orangeAccent,
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const DuelScreen()),
+                      );
+                    },
+                    icon: const Icon(Icons.sports_esports),
+                    label: const Text('Thi đấu xếp hạng'),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 🏆 Xem bảng xếp hạng
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const RankScreen()),
+                      );
+                    },
+                    icon: const Icon(Icons.leaderboard),
+                    label: const Text('Bảng xếp hạng'),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ⏳ Lịch sử
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const HistoryScreen()),
+                      );
+                    },
+                    icon: const Icon(Icons.history),
+                    label: const Text('Lịch sử Quiz'),
+                  ),
+                ],
+              ),
             ),
           );
         },
       ),
+    );
+  }
+
+  // Widget phụ hiển thị thống kê
+  Widget _rankStat(String label, String value, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.amber),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 13, color: Colors.grey),
+        ),
+      ],
     );
   }
 }

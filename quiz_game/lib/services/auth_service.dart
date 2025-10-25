@@ -25,9 +25,13 @@ class AuthService {
       await _db.collection('users').doc(cred.user!.uid).set({
         'email': email.trim(),
         'displayName': '',
-        'avatarUrl': '', // ✅ đồng nhất với ProfileScreen
+        'avatarUrl': '',
         'gender': '',
         'birthday': '',
+        // 🔹 Thêm các trường rank mặc định
+        'rankPoints': 0,
+        'wins': 0,
+        'losses': 0,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -47,6 +51,23 @@ class AuthService {
         email: email.trim(),
         password: password,
       );
+
+      // 🔹 Khi user cũ đăng nhập, kiểm tra & thêm các field rank nếu thiếu
+      final ref = _db.collection('users').doc(cred.user!.uid);
+      final doc = await ref.get();
+      if (doc.exists) {
+        final data = doc.data() ?? {};
+        final updates = <String, dynamic>{};
+
+        if (!data.containsKey('rankPoints')) updates['rankPoints'] = 0;
+        if (!data.containsKey('wins')) updates['wins'] = 0;
+        if (!data.containsKey('losses')) updates['losses'] = 0;
+
+        if (updates.isNotEmpty) {
+          await ref.set(updates, SetOptions(merge: true));
+        }
+      }
+
       return cred.user;
     } on FirebaseAuthException catch (e) {
       throw _mapError(e);
@@ -88,12 +109,15 @@ class AuthService {
         avatarUrl = await uploadTask.ref.getDownloadURL();
       }
 
-      // 🔹 Cập nhật Firestore
-      await _db.collection('users').doc(uid).update({
+      // 🔹 Cập nhật Firestore (và đảm bảo có rank fields)
+      await _db.collection('users').doc(uid).set({
         if (displayName != null) 'displayName': displayName,
-        if (avatarUrl != null) 'avatarUrl': avatarUrl, // ✅ đúng key
+        if (avatarUrl != null) 'avatarUrl': avatarUrl,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+        'rankPoints': FieldValue.increment(0),
+        'wins': FieldValue.increment(0),
+        'losses': FieldValue.increment(0),
+      }, SetOptions(merge: true));
     } catch (e) {
       throw Exception('Lỗi khi cập nhật hồ sơ: $e');
     }

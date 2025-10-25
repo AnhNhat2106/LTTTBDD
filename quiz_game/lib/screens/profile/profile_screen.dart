@@ -80,11 +80,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       'gender': _gender,
       'birthday': _birthday.text.trim(),
       'avatarUrl': url ?? '',
+      'updatedAt': FieldValue.serverTimestamp(),
+      // 🟩 đảm bảo user luôn có các trường rank mặc định
+      'rankPoints': FieldValue.increment(0),
+      'wins': FieldValue.increment(0),
+      'losses': FieldValue.increment(0),
     }, SetOptions(merge: true));
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã lưu hồ sơ thành công')),
+        const SnackBar(content: Text('✅ Hồ sơ đã được lưu thành công')),
       );
     }
   }
@@ -112,7 +117,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await FirebaseAuth.instance.sendPasswordResetEmail(email: user.email!);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã gửi email đổi mật khẩu')),
+        const SnackBar(content: Text('📧 Đã gửi email đổi mật khẩu')),
       );
     }
   }
@@ -140,7 +145,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ? FileImage(_image!)
         : (_avatarUrl != null && _avatarUrl!.isNotEmpty
         ? NetworkImage(_avatarUrl!)
-        : const AssetImage('assets/avatar_placeholder.png') as ImageProvider);
+        : const AssetImage('assets/avatar_placeholder.png')
+    as ImageProvider);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -153,7 +159,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // 🖼 Ảnh đại diện + nút chỉnh sửa
+            // 🖼 Avatar + nút chỉnh sửa
             Stack(
               alignment: Alignment.bottomRight,
               children: [
@@ -167,7 +173,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onPressed: _pickImage,
                     child: const Icon(Icons.edit, color: Colors.white),
                   ),
-                )
+                ),
               ],
             ),
             if (_image != null && _uploadProgress > 0 && _uploadProgress < 1)
@@ -230,7 +236,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 20),
 
-            // 💾 Nút lưu thay đổi
+            // 💾 Lưu thay đổi
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -241,7 +247,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 12),
 
-            // 🔐 Nút đổi mật khẩu
+            // 🔐 Đổi mật khẩu
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
