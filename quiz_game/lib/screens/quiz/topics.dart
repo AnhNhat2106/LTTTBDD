@@ -4,6 +4,6 @@ import '../../data/questions_math.dart';
 
 final topics = {
   "Lịch sử": questionsHistory,
-  "CNTT": questionsIT,
+  "Công nghệ thông tin": questionsIT,
   "Toán học": questionsMath,
 };
