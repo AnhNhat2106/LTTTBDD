@@ -14,7 +14,10 @@ class DuelScreen extends StatefulWidget {
 class _DuelScreenState extends State<DuelScreen> {
   String? selectedTopic;
   bool isSearching = false;
+  bool isMatched = false;
   String statusText = 'Chọn chủ đề để thi đấu';
+  String? opponentName;
+  String? roomId;
 
   final user = FirebaseAuth.instance.currentUser!;
   final _db = FirebaseFirestore.instance;
@@ -44,14 +47,16 @@ class _DuelScreenState extends State<DuelScreen> {
     if (waitingRooms.docs.isNotEmpty) {
       // 2️⃣ Ghép vào phòng có sẵn
       final room = waitingRooms.docs.first.reference;
+      roomId = room.id;
+
       await room.update({
         'player2': user.uid,
         'player2Email': user.email,
-        'status': 'playing',
+        'status': 'matched', // ✅ chuyển sang trạng thái matched (đang chờ xác nhận)
       });
 
       setState(() {
-        statusText = '🥳 Ghép đấu thành công! Đang vào phòng...';
+        statusText = '🥳 Tìm thấy đối thủ, đang chờ xác nhận...';
       });
 
       _listenToRoom(room.id);
@@ -69,12 +74,32 @@ class _DuelScreenState extends State<DuelScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
+      roomId = newRoom.id;
+
       setState(() {
         statusText = '⏳ Chờ đối thủ tham gia...';
       });
 
       _listenToRoom(newRoom.id);
     }
+  }
+
+  /// 🔹 Hủy tìm đối thủ
+  Future<void> _cancelSearch() async {
+    if (roomId != null) {
+      final roomRef = _db.collection('duel_rooms').doc(roomId);
+      final doc = await roomRef.get();
+      if (doc.exists && doc['status'] == 'waiting') {
+        await roomRef.delete();
+      }
+    }
+
+    setState(() {
+      isSearching = false;
+      statusText = 'Chọn chủ đề để thi đấu';
+      opponentName = null;
+      roomId = null;
+    });
   }
 
   /// 🔹 Lắng nghe thay đổi của phòng
@@ -84,12 +109,34 @@ class _DuelScreenState extends State<DuelScreen> {
       final data = snap.data()!;
       final status = data['status'];
 
-      // Khi status chuyển sang "playing" → bắt đầu quiz
+      // ✅ Khi vừa match được 2 người
+      if (status == 'matched' && !isMatched) {
+        setState(() {
+          isMatched = true;
+          isSearching = false;
+        });
+
+        final opponentId =
+        data['player1'] == user.uid ? data['player2'] : data['player1'];
+
+        if (opponentId != null) {
+          final opponentDoc =
+          await _db.collection('users').doc(opponentId).get();
+          final opponentData = opponentDoc.data();
+          setState(() {
+            opponentName = opponentData?['displayName'] ??
+                opponentData?['email'] ??
+                'Người chơi';
+            statusText = '🎯 Đã tìm thấy đối thủ: $opponentName';
+          });
+        }
+      }
+
+      // ✅ Khi cả 2 đã xác nhận, bắt đầu thi đấu
       if (status == 'playing') {
         final topic = data['topic'];
         final questions = topics[topic] ?? [];
 
-        // 🚀 Bắt đầu quiz
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -99,84 +146,27 @@ class _DuelScreenState extends State<DuelScreen> {
             ),
           ),
         ).then((score) async {
-          // 🔹 Nhận điểm trả về từ QuizScreen
           if (score == null) return;
-
           final field = data['player1'] == user.uid
               ? 'player1Score'
               : 'player2Score';
-
           await _db.collection('duel_rooms').doc(roomId).update({
             field: score,
           });
-
-          // 🔹 Kiểm tra nếu cả 2 người đã có điểm → tính kết quả
-          final updated = await _db.collection('duel_rooms').doc(roomId).get();
-          final res = updated.data()!;
-          final s1 = res['player1Score'] ?? 0;
-          final s2 = res['player2Score'] ?? 0;
-
-          if (s1 > 0 && s2 > 0) {
-            await _finishMatch(res);
-          }
         });
       }
     });
   }
 
-  /// 🔹 Cập nhật kết quả thắng/thua & điểm rank
-  Future<void> _finishMatch(Map<String, dynamic> room) async {
-    final userRef = _db.collection('users').doc(user.uid);
-    final data = await userRef.get();
-    final current = data.data() ?? {};
-
-    int rankPoints = (current['rankPoints'] ?? 0) as int;
-    int wins = (current['wins'] ?? 0) as int;
-    int losses = (current['losses'] ?? 0) as int;
-
-    final s1 = room['player1Score'] ?? 0;
-    final s2 = room['player2Score'] ?? 0;
-    final isPlayer1 = room['player1'] == user.uid;
-
-    bool isWin = (isPlayer1 && s1 > s2) || (!isPlayer1 && s2 > s1);
-
-    // ✅ Nếu hòa thì không cộng/trừ
-    if (s1 == s2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('🤝 Hai bạn hòa nhau! Không thay đổi điểm rank.')),
-      );
-      return;
-    }
-
-    if (isWin) {
-      rankPoints += 10;
-      wins += 1;
-    } else {
-      rankPoints = (rankPoints - 5).clamp(0, 99999); // không âm điểm
-      losses += 1;
-    }
-
-    await userRef.update({
-      'rankPoints': rankPoints,
-      'wins': wins,
-      'losses': losses,
+  /// 🔹 Xác nhận tham gia trận đấu
+  Future<void> _confirmStart() async {
+    if (roomId == null) return;
+    await _db.collection('duel_rooms').doc(roomId).update({
+      'status': 'playing',
     });
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isWin
-                ? '🏆 Bạn đã thắng +10 điểm rank!'
-                : '😢 Bạn thua -5 điểm rank!',
-          ),
-        ),
-      );
-    }
-
-    // 🔹 Cập nhật trạng thái phòng đã hoàn tất
-    await _db.collection('duel_rooms').doc(room['id']).update({
-      'status': 'finished',
+    setState(() {
+      statusText = '🚀 Trận đấu bắt đầu!';
     });
   }
 
@@ -204,26 +194,40 @@ class _DuelScreenState extends State<DuelScreen> {
               ),
               value: selectedTopic,
               items: topics.keys
-                  .map(
-                    (key) => DropdownMenuItem(
-                  value: key,
-                  child: Text(key),
-                ),
-              )
+                  .map((key) => DropdownMenuItem(
+                value: key,
+                child: Text(key),
+              ))
                   .toList(),
               onChanged: (v) => setState(() => selectedTopic = v),
             ),
             const SizedBox(height: 30),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.sports_kabaddi),
-              label: const Text('Tìm đối thủ'),
-              onPressed: isSearching ? null : _findOpponent,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                textStyle: const TextStyle(fontSize: 18),
+
+            // 🕹 Nút tìm hoặc hủy
+            if (!isSearching && !isMatched)
+              ElevatedButton.icon(
+                icon: const Icon(Icons.sports_kabaddi),
+                label: const Text('Tìm đối thủ'),
+                onPressed: _findOpponent,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  textStyle: const TextStyle(fontSize: 18),
+                ),
+              )
+            else if (isSearching)
+              OutlinedButton.icon(
+                icon: const Icon(Icons.close),
+                label: const Text('Hủy tìm kiếm'),
+                onPressed: _cancelSearch,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  textStyle: const TextStyle(fontSize: 18),
+                ),
               ),
-            ),
-            const SizedBox(height: 30),
+
+            const SizedBox(height: 40),
+
+            // 🧠 Trạng thái
             Center(
               child: Column(
                 children: [
@@ -234,6 +238,30 @@ class _DuelScreenState extends State<DuelScreen> {
                     style: const TextStyle(fontSize: 18),
                     textAlign: TextAlign.center,
                   ),
+                  const SizedBox(height: 20),
+
+                  // 🎯 Nếu đã tìm thấy đối thủ
+                  if (isMatched && opponentName != null)
+                    Column(
+                      children: [
+                        Text(
+                          'Đối thủ của bạn là: $opponentName',
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 15),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.check_circle_outline),
+                          label: const Text('Xác nhận tham gia'),
+                          onPressed: _confirmStart,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            textStyle: const TextStyle(fontSize: 18),
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),

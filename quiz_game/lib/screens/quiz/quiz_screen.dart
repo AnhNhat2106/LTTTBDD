@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/quiz_service.dart';
 import 'result_screen.dart';
@@ -22,6 +23,25 @@ class _QuizScreenState extends State<QuizScreen> {
   int? selectedIndex;
   bool isAnswered = false;
 
+  late Timer _timer;
+  int timeLeft = 10; // ⏱ số giây cho mỗi câu
+
+  @override
+  void initState() {
+    super.initState();
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (timeLeft > 0) {
+        setState(() => timeLeft--);
+      } else {
+        _nextQuestion(autoSkip: true);
+      }
+    });
+  }
+
   void checkAnswer(int index) async {
     if (isAnswered) return;
 
@@ -32,28 +52,35 @@ class _QuizScreenState extends State<QuizScreen> {
       if (index == correctIndex) score++;
     });
 
-    await Future.delayed(const Duration(milliseconds: 1200));
+    await Future.delayed(const Duration(milliseconds: 1000));
+    _nextQuestion();
+  }
+
+  void _nextQuestion({bool autoSkip = false}) async {
+    _timer.cancel();
 
     if (currentIndex < widget.questionList.length - 1) {
       setState(() {
         currentIndex++;
         isAnswered = false;
         selectedIndex = null;
+        timeLeft = 10; // reset timer cho câu mới
       });
+      _startTimer();
     } else {
-      // ✅ Lưu kết quả (chỉ dành cho chế độ luyện tập)
+      // ✅ Lưu kết quả (chế độ luyện tập)
       await QuizService.saveQuizResult(
         topic: widget.topicKey,
         score: score,
         total: widget.questionList.length,
       );
 
-      // ✅ Trả điểm về cho DuelScreen (PvP)
+      // ✅ Trả điểm về DuelScreen nếu có (PvP)
       if (Navigator.canPop(context)) {
         Navigator.pop(context, score);
       }
 
-      // ✅ Hiển thị màn hình kết quả cá nhân
+      // ✅ Hiển thị kết quả cá nhân
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -67,6 +94,12 @@ class _QuizScreenState extends State<QuizScreen> {
         );
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
   }
 
   @override
@@ -89,13 +122,35 @@ class _QuizScreenState extends State<QuizScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 🧭 Thanh tiến độ
+            // 🧭 Tiến độ câu hỏi
             LinearProgressIndicator(
               value: progress,
               color: color.primary,
               backgroundColor: color.primary.withOpacity(.2),
               borderRadius: BorderRadius.circular(6),
             ),
+            const SizedBox(height: 10),
+
+            // ⏳ Thanh thời gian đếm ngược
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                LinearProgressIndicator(
+                  value: timeLeft / 10,
+                  minHeight: 10,
+                  color: timeLeft > 3 ? Colors.green : Colors.red,
+                  backgroundColor: Colors.grey.shade300,
+                ),
+                Text(
+                  "$timeLeft giây",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: timeLeft > 3 ? Colors.black : Colors.redAccent,
+                  ),
+                ),
+              ],
+            ),
+
             const SizedBox(height: 20),
 
             // 🧩 Thông tin câu hỏi
@@ -107,6 +162,7 @@ class _QuizScreenState extends State<QuizScreen> {
               ),
             ),
             const SizedBox(height: 10),
+
             Text(
               question['question'],
               style: theme.textTheme.titleLarge?.copyWith(
@@ -146,7 +202,7 @@ class _QuizScreenState extends State<QuizScreen> {
                     foregroundColor: theme.brightness == Brightness.dark
                         ? Colors.white
                         : Colors.black87,
-                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
