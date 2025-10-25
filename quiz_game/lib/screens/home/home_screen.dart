@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import '../ history/history_menu_screen.dart';
 import '../../providers/theme_provider.dart';
 import '../quiz/topic_screen.dart';
-import '../quiz/history_screen.dart';
 import '../../services/auth_service.dart';
 import '../profile/profile_screen.dart';
-
-// 🏆 Màn hình bảng xếp hạng (sẽ tạo sau)
 import '../rank/rank_screen.dart';
-// ⚔️ Màn hình thi đấu (sẽ tạo sau)
 import '../rank/duel_screen.dart';
+
+// 🕓 Màn hình chọn loại lịch sử (menu)
+import '../history/history_menu_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -62,6 +62,7 @@ class HomeScreen extends StatelessWidget {
         ],
       ),
 
+      // 🧩 Nội dung chính
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
@@ -127,7 +128,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 32),
 
-                  // ▶️ Nút luyện tập quiz
+                  // ▶️ Luyện tập quiz
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 48),
@@ -160,7 +161,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
 
-                  // 🏆 Xem bảng xếp hạng
+                  // 🏆 Bảng xếp hạng
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 48),
@@ -176,7 +177,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
 
-                  // ⏳ Lịch sử
+                  // 📜 Lịch sử Quiz (Menu chọn loại)
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 48),
@@ -184,7 +185,8 @@ class HomeScreen extends StatelessWidget {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const HistoryScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const HistoryMenuScreen()),
                       );
                     },
                     icon: const Icon(Icons.history),
@@ -199,7 +201,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // Widget phụ hiển thị thống kê
+  // Widget hiển thị thống kê Rank nhỏ
   Widget _rankStat(String label, String value, IconData icon) {
     return Column(
       children: [

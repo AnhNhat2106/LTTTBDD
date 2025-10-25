@@ -4,9 +4,9 @@ import '../../services/quiz_service.dart';
 import 'result_screen.dart';
 
 class QuizScreen extends StatefulWidget {
-  final String topicKey; // tên chủ đề (ví dụ: 'Lịch sử', 'CNTT')
-  final List<Map<String, dynamic>> questionList; // danh sách câu hỏi
-  final bool isDuel; // true nếu chơi PvP, false nếu luyện tập
+  final String topicKey;
+  final List<Map<String, dynamic>> questionList;
+  final bool isDuel;
 
   const QuizScreen({
     super.key,
@@ -49,7 +49,6 @@ class _QuizScreenState extends State<QuizScreen> {
       if (!mounted) return;
       if (remain <= 1) {
         t.cancel();
-        // hết giờ mà chưa trả lời -> chuyển câu, không cộng điểm
         _autoNextWhenTimeout();
       } else {
         setState(() => remain--);
@@ -61,7 +60,7 @@ class _QuizScreenState extends State<QuizScreen> {
     if (!isAnswered) {
       setState(() {
         isAnswered = true;
-        selectedIndex = null; // không chọn
+        selectedIndex = null;
       });
       await Future.delayed(const Duration(milliseconds: 600));
     }
@@ -70,14 +69,12 @@ class _QuizScreenState extends State<QuizScreen> {
 
   void checkAnswer(int index) async {
     if (isAnswered) return;
-
     final correctIndex = widget.questionList[currentIndex]['answer'];
     setState(() {
       selectedIndex = index;
       isAnswered = true;
       if (index == correctIndex) score++;
     });
-
     await Future.delayed(const Duration(milliseconds: 900));
     _goNextOrFinish();
   }
@@ -93,7 +90,7 @@ class _QuizScreenState extends State<QuizScreen> {
     } else {
       _timer?.cancel();
 
-      // PvE: lưu lịch sử
+      // PvE – Lưu lịch sử
       if (!widget.isDuel) {
         await QuizService.saveQuizResult(
           topic: widget.topicKey,
@@ -102,13 +99,13 @@ class _QuizScreenState extends State<QuizScreen> {
         );
       }
 
-      // Trả điểm về cho màn hình gọi (Duel)
+      // PvP – Gửi điểm về DuelScreen
       if (widget.isDuel) {
         if (mounted) Navigator.pop(context, score);
         return;
       }
 
-      // Hiển thị màn hình kết quả cá nhân
+      // Hiển thị kết quả cá nhân
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -131,7 +128,6 @@ class _QuizScreenState extends State<QuizScreen> {
     final question = widget.questionList[currentIndex];
     final total = widget.questionList.length;
     final progress = (currentIndex + 1) / total;
-
     final correctIndex = question['answer'];
 
     return Scaffold(
@@ -163,7 +159,6 @@ class _QuizScreenState extends State<QuizScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Thanh tiến độ
             LinearProgressIndicator(
               value: progress,
               color: color.primary,
@@ -171,8 +166,6 @@ class _QuizScreenState extends State<QuizScreen> {
               borderRadius: BorderRadius.circular(6),
             ),
             const SizedBox(height: 16),
-
-            // Câu số
             Text(
               "Câu ${currentIndex + 1}/$total",
               style: theme.textTheme.titleMedium?.copyWith(
@@ -181,8 +174,6 @@ class _QuizScreenState extends State<QuizScreen> {
               ),
             ),
             const SizedBox(height: 10),
-
-            // Nội dung câu hỏi
             Text(
               question['question'],
               style: theme.textTheme.titleLarge?.copyWith(
@@ -191,8 +182,6 @@ class _QuizScreenState extends State<QuizScreen> {
               ),
             ),
             const SizedBox(height: 22),
-
-            // Các lựa chọn
             ...List.generate(question['options'].length, (index) {
               final optionText = question['options'][index];
               Color? btnColor;
@@ -200,7 +189,8 @@ class _QuizScreenState extends State<QuizScreen> {
               if (isAnswered) {
                 if (index == correctIndex) {
                   btnColor = Colors.green.shade400;
-                } else if (index == selectedIndex && selectedIndex != correctIndex) {
+                } else if (index == selectedIndex &&
+                    selectedIndex != correctIndex) {
                   btnColor = Colors.red.shade400;
                 } else {
                   btnColor = theme.brightness == Brightness.dark
@@ -221,7 +211,8 @@ class _QuizScreenState extends State<QuizScreen> {
                     foregroundColor: theme.brightness == Brightness.dark
                         ? Colors.white
                         : Colors.black87,
-                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 14, horizontal: 8),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -231,7 +222,8 @@ class _QuizScreenState extends State<QuizScreen> {
                   child: Text(
                     optionText,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                 ),
               );

@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../quiz/topics.dart';
 import '../quiz/quiz_screen.dart';
+import '../quiz/result_screen.dart';
 
 class DuelScreen extends StatefulWidget {
   const DuelScreen({super.key});
@@ -26,8 +27,7 @@ class _DuelScreenState extends State<DuelScreen> {
 
   String? _opponentId;
   String? _opponentName;
-
-  bool hasStarted = false; // ✅ Ngăn dialog hiển thị lặp lại
+  bool hasStarted = false;
 
   @override
   void dispose() {
@@ -35,7 +35,6 @@ class _DuelScreenState extends State<DuelScreen> {
     super.dispose();
   }
 
-  // =============== GHÉP ĐÔI ===============
   Future<void> _findOpponent() async {
     if (selectedTopic == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -49,7 +48,6 @@ class _DuelScreenState extends State<DuelScreen> {
       statusText = '🔍 Đang tìm đối thủ...';
     });
 
-    // 1️⃣ Tìm phòng waiting cùng chủ đề
     final waiting = await _db
         .collection('duel_rooms')
         .where('topic', isEqualTo: selectedTopic)
@@ -92,14 +90,12 @@ class _DuelScreenState extends State<DuelScreen> {
 
   Future<void> _cancelSearch() async {
     if (!isSearching) return;
-
     if (_iCreated && _roomId != null) {
       final roomSnap = await _db.collection('duel_rooms').doc(_roomId!).get();
       if (roomSnap.exists && (roomSnap.data()?['status'] == 'waiting')) {
         await _db.collection('duel_rooms').doc(_roomId!).delete();
       }
     }
-
     _roomSub?.cancel();
     setState(() {
       _roomId = null;
@@ -109,90 +105,85 @@ class _DuelScreenState extends State<DuelScreen> {
     });
   }
 
-  // =============== LẮNG NGHE PHÒNG ===============
   void _listenToRoom(String roomId) {
     _roomSub?.cancel();
-    _roomSub = _db.collection('duel_rooms').doc(roomId).snapshots().listen(
-          (snap) async {
-        if (!snap.exists) return;
-        final data = snap.data()!;
-        final status = data['status'] as String;
+    _roomSub =
+        _db.collection('duel_rooms').doc(roomId).snapshots().listen((snap) async {
+          if (!snap.exists) return;
+          final data = snap.data()!;
+          final status = data['status'] as String;
 
-        final p1 = data['player1'];
-        final p2 = data['player2'];
-        final myId = user.uid;
-        _opponentId = myId == p1 ? p2 : p1;
+          final p1 = data['player1'];
+          final p2 = data['player2'];
+          final myId = user.uid;
+          _opponentId = myId == p1 ? p2 : p1;
 
-        // Lấy tên đối thủ
-        if (_opponentId != null) {
-          final u = await _db.collection('users').doc(_opponentId).get();
-          _opponentName = (u.data()?['displayName'] ?? u.data()?['email'] ?? 'Đối thủ').toString();
-        }
-
-        // 🔹 CHỈ HIỂN THỊ LẦN ĐẦU
-        if (status == 'playing' && !hasStarted) {
-          hasStarted = true;
-
-          if (mounted) {
-            final ok = await showDialog<bool>(
-              context: context,
-              barrierDismissible: false,
-              builder: (_) => AlertDialog(
-                title: const Text('Đã tìm thấy đối thủ'),
-                content: Text(
-                  'Đối thủ: ${_opponentName ?? '???'}\nBấm "Bắt đầu" để vào trận.',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text('Thoát'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Bắt đầu'),
-                  ),
-                ],
-              ),
-            ) ??
-                false;
-
-            if (!ok) {
-              hasStarted = false;
-              _cancelSearch();
-              return;
-            }
+          if (_opponentId != null) {
+            final u = await _db.collection('users').doc(_opponentId).get();
+            _opponentName =
+                (u.data()?['displayName'] ?? u.data()?['email'] ?? 'Đối thủ')
+                    .toString();
           }
 
-          final topic = data['topic'];
-          final questions = topics[topic] ?? [];
-          if (!mounted) return;
+          if (status == 'playing' && !hasStarted) {
+            hasStarted = true;
 
-          final myScore = await Navigator.push<int>(
-            context,
-            MaterialPageRoute(
-              builder: (_) => QuizScreen(
-                topicKey: topic,
-                questionList: questions,
-                isDuel: true,
+            if (mounted) {
+              final ok = await showDialog<bool>(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => AlertDialog(
+                  title: const Text('Đã tìm thấy đối thủ'),
+                  content: Text(
+                    'Đối thủ: ${_opponentName ?? '???'}\nBấm "Bắt đầu" để vào trận.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Thoát'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Bắt đầu'),
+                    ),
+                  ],
+                ),
+              ) ??
+                  false;
+
+              if (!ok) {
+                hasStarted = false;
+                _cancelSearch();
+                return;
+              }
+            }
+
+            final topic = data['topic'];
+            final questions = topics[topic] ?? [];
+            if (!mounted) return;
+
+            final myScore = await Navigator.push<int>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => QuizScreen(
+                  topicKey: topic,
+                  questionList: questions,
+                  isDuel: true,
+                ),
               ),
-            ),
-          );
+            );
 
-          // Ghi điểm người chơi
-          final field = (data['player1'] == user.uid)
-              ? 'player1Score'
-              : 'player2Score';
-          await _db.collection('duel_rooms').doc(roomId).update({
-            field: myScore ?? 0,
-          });
+            final field =
+            (data['player1'] == user.uid) ? 'player1Score' : 'player2Score';
+            await _db.collection('duel_rooms').doc(roomId).update({
+              field: myScore ?? 0,
+            });
 
-          await _tryFinishMatch(roomId);
-        }
-      },
-    );
+            await _tryFinishMatch(roomId);
+          }
+        });
   }
 
-  // =============== KẾT THÚC TRẬN ===============
   Future<void> _tryFinishMatch(String roomId) async {
     final ref = _db.collection('duel_rooms').doc(roomId);
     final snap = await ref.get();
@@ -212,7 +203,6 @@ class _DuelScreenState extends State<DuelScreen> {
     final uid2 = room['player2'] as String?;
 
     await _db.runTransaction((trx) async {
-      // Update player1
       final u1 = await trx.get(_db.collection('users').doc(uid1));
       if (u1.exists) {
         int rp = (u1.data()?['rankPoints'] ?? 0) as int;
@@ -229,7 +219,6 @@ class _DuelScreenState extends State<DuelScreen> {
         trx.update(u1.reference, {'rankPoints': rp, 'wins': w, 'losses': l});
       }
 
-      // Update player2
       if (uid2 != null) {
         final u2ref = _db.collection('users').doc(uid2);
         final u2 = await trx.get(u2ref);
@@ -257,15 +246,32 @@ class _DuelScreenState extends State<DuelScreen> {
     });
 
     if (!mounted) return;
-    final isMeWinner =
-    (winner == null) ? null : (winner == user.uid);
+    final isMeWinner = (winner == null) ? null : (winner == user.uid);
     final msg = (isMeWinner == null)
         ? '🤝 Trận đấu kết thúc: HOÀ'
         : (isMeWinner
         ? '🏆 Bạn THẮNG! +10 điểm rank'
         : '😢 Bạn THUA -5 điểm rank');
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+
+    // ✅ Mở ResultScreen sau khi cập nhật điểm
+    final topic = (room['topic'] ?? 'Không rõ') as String;
+    final total = (topics[topic]?.length ?? 10);
+
+    await Future.delayed(const Duration(milliseconds: 800));
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ResultScreen(
+          topicKey: topic,
+          score: (room['player1'] == user.uid)
+              ? (room['player1Score'] ?? 0)
+              : (room['player2Score'] ?? 0),
+          total: total,
+        ),
+      ),
+    );
 
     setState(() {
       isSearching = false;
@@ -298,10 +304,8 @@ class _DuelScreenState extends State<DuelScreen> {
               ),
               value: selectedTopic,
               items: topics.keys
-                  .map(
-                    (key) =>
-                    DropdownMenuItem(value: key, child: Text(key)),
-              )
+                  .map((key) =>
+                  DropdownMenuItem(value: key, child: Text(key)))
                   .toList(),
               onChanged: (v) => setState(() => selectedTopic = v),
             ),
@@ -341,8 +345,7 @@ class _DuelScreenState extends State<DuelScreen> {
             Center(
               child: Column(
                 children: [
-                  if (isSearching)
-                    const CircularProgressIndicator(),
+                  if (isSearching) const CircularProgressIndicator(),
                   const SizedBox(height: 14),
                   Text(
                     statusText,
@@ -353,8 +356,7 @@ class _DuelScreenState extends State<DuelScreen> {
                     const SizedBox(height: 8),
                     Text(
                       'Đối thủ: ${_opponentName!}',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ],
                 ],
