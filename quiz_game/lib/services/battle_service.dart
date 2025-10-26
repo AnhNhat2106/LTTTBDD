@@ -11,7 +11,7 @@ class BattleService {
   CollectionReference<Map<String, dynamic>> get _rooms =>
       _db.collection('duel_rooms');
 
-  /// Tạo phòng chờ theo chủ đề
+  /// 🏁 Tạo phòng chờ
   Future<String> createRoom({required String topic}) async {
     final u = _auth.currentUser!;
     final doc = await _rooms.add({
@@ -31,7 +31,7 @@ class BattleService {
     return doc.id;
   }
 
-  /// Ghép phòng tự động: ưu tiên phòng waiting, nếu không có thì tạo mới
+  /// 🔍 Ghép phòng tự động: ưu tiên phòng waiting
   Future<String> autoMatchOrCreate({required String topic}) async {
     final waiting = await _rooms
         .where('topic', isEqualTo: topic)
@@ -48,7 +48,7 @@ class BattleService {
     }
   }
 
-  /// Người thứ hai vào phòng
+  /// 👥 Người thứ hai vào phòng
   Future<void> joinRoom(String roomId) async {
     final u = _auth.currentUser!;
     final ref = _rooms.doc(roomId);
@@ -69,16 +69,16 @@ class BattleService {
     });
   }
 
-  /// Lắng nghe phòng realtime
+  /// 👂 Lắng nghe phòng realtime
   Stream<DocumentSnapshot<Map<String, dynamic>>> watchRoom(String roomId) {
     return _rooms.doc(roomId).snapshots();
   }
 
-  /// Nộp điểm của mình
+  /// 📝 Nộp điểm của mình
   Future<void> submitMyScore({
     required String roomId,
     required int score,
-    required int total, // total không dùng trong duel_rooms, nhưng giữ tham số để tương thích
+    required int total,
   }) async {
     final u = _auth.currentUser!;
     final ref = _rooms.doc(roomId);
@@ -88,29 +88,23 @@ class BattleService {
       if (!snap.exists) return;
       final data = snap.data()!;
 
-      // xác định là p1 hay p2
       final isP1 = data['player1'] == u.uid;
       final field = isP1 ? 'player1Score' : 'player2Score';
-
       tx.update(ref, {field: score});
 
-      final s1 = (isP1 ? score : data['player1Score']);
-      final s2 = (isP1 ? data['player2Score'] : score);
+      final s1 = isP1 ? score : data['player1Score'];
+      final s2 = isP1 ? data['player2Score'] : score;
 
-      // nếu cả hai đều có điểm -> kết thúc
       if (s1 != null && s2 != null) {
         tx.update(ref, {
           'status': 'finished',
           'finishedAt': FieldValue.serverTimestamp(),
         });
       }
-    }).catchError((e) {
-      // ignore but log
-      // print('submitMyScore error: $e');
     });
   }
 
-  /// Tổng kết & cộng/trừ Rank (chạy 1 lần)
+  /// 🧮 Tổng kết & cập nhật Rank + winner (chạy 1 lần)
   Future<void> finalizeAndRank(String roomId) async {
     final ref = _rooms.doc(roomId);
     final snap = await ref.get();
@@ -119,12 +113,15 @@ class BattleService {
     if (data['status'] != 'finished') return;
     if (data['finalized'] == true) return;
 
-    final String? p1 = data['player1'];
-    final String? p2 = data['player2'];
+    final p1 = data['player1'];
+    final p2 = data['player2'];
     if (p1 == null || p2 == null) return;
 
-    final int s1 = (data['player1Score'] ?? 0) as int;
-    final int s2 = (data['player2Score'] ?? 0) as int;
+    final s1 = (data['player1Score'] ?? 0) as int;
+    final s2 = (data['player2Score'] ?? 0) as int;
+    final topic = data['topic'] ?? 'Chưa rõ';
+    final p1Email = data['player1Email'] ?? '';
+    final p2Email = data['player2Email'] ?? '';
 
     String? winner;
     if (s1 > s2) winner = p1;
@@ -133,8 +130,8 @@ class BattleService {
     final p1Ref = _db.collection('users').doc(p1);
     final p2Ref = _db.collection('users').doc(p2);
 
-    // Cập nhật rank an toàn bằng increment + merge
     await _db.runTransaction((tx) async {
+      // ✅ Cộng/trừ điểm rank
       if (winner == null) {
         tx.set(p1Ref, {'rankPoints': FieldValue.increment(2)}, SetOptions(merge: true));
         tx.set(p2Ref, {'rankPoints': FieldValue.increment(2)}, SetOptions(merge: true));
@@ -158,9 +155,14 @@ class BattleService {
         }, SetOptions(merge: true));
       }
 
+      // ✅ Cập nhật lại duel_rooms với winner + topic + email
       tx.update(ref, {
-        'winner': winner, // null = Hòa
+        'winner': winner,
         'finalized': true,
+        'topic': topic,
+        'player1Email': p1Email,
+        'player2Email': p2Email,
+        'finishedAt': FieldValue.serverTimestamp(),
       });
     });
   }

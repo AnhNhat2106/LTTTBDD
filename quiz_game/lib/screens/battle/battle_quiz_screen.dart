@@ -39,7 +39,6 @@ class _BattleQuizScreenState extends State<BattleQuizScreen> {
     if (submitted) return;
     submitted = true;
 
-    // 🔹 Gửi điểm của người chơi lên Firebase
     await BattleService.instance.submitMyScore(
       roomId: widget.roomId,
       score: score,
@@ -48,14 +47,11 @@ class _BattleQuizScreenState extends State<BattleQuizScreen> {
 
     if (!mounted) return;
 
-    // 🔹 Sau khi nộp điểm, chuyển sang màn hình chờ kết quả
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (_) => _WaitingResultScreen(
           roomId: widget.roomId,
-          myScore: score,
-          total: widget.questionList.length,
         ),
       ),
     );
@@ -71,10 +67,8 @@ class _BattleQuizScreenState extends State<BattleQuizScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Câu ${currentIndex + 1}/${widget.questionList.length}',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+            Text('Câu ${currentIndex + 1}/${widget.questionList.length}',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             Text(q['question'], style: const TextStyle(fontSize: 18)),
             const SizedBox(height: 16),
@@ -94,20 +88,9 @@ class _BattleQuizScreenState extends State<BattleQuizScreen> {
   }
 }
 
-/// ----------------------------
-/// 🕒 Màn hình chờ đối thủ nộp điểm
-/// ----------------------------
 class _WaitingResultScreen extends StatelessWidget {
   final String roomId;
-  final int myScore;
-  final int total;
-
-  const _WaitingResultScreen({
-    required this.roomId,
-    required this.myScore,
-    required this.total,
-    super.key,
-  });
+  const _WaitingResultScreen({super.key, required this.roomId});
 
   @override
   Widget build(BuildContext context) {
@@ -124,9 +107,7 @@ class _WaitingResultScreen extends StatelessWidget {
 
         final data = (snap.data! as dynamic).data();
         if (data == null) {
-          return const Scaffold(
-            body: Center(child: Text('Phòng không tồn tại')),
-          );
+          return const Scaffold(body: Center(child: Text('Phòng không tồn tại')));
         }
 
         final status = data['status'] as String? ?? 'waiting';
@@ -136,7 +117,7 @@ class _WaitingResultScreen extends StatelessWidget {
           );
         }
 
-        // 🔹 Chỉ 1 người finalize (tránh xử lý trùng)
+        // ✅ Chỉ player1 finalize để tránh trùng
         if (data['finalized'] != true) {
           final p1 = data['player1'];
           if (currentUid == p1) {
@@ -144,13 +125,11 @@ class _WaitingResultScreen extends StatelessWidget {
           }
         }
 
-        // 🔹 Khi cả 2 người đã xong, sang màn hình kết quả chính thức
+        // ✅ Khi cả hai hoàn tất, chuyển sang màn kết quả PvP
         Future.microtask(() {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(
-              builder: (_) => BattleResultScreen(roomId: roomId),
-            ),
+            MaterialPageRoute(builder: (_) => BattleResultScreen(roomId: roomId)),
           );
         });
 

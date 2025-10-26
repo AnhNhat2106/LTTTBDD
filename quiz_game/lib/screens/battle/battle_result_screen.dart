@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../services/battle_service.dart';
+import '../home/home_screen.dart';
 
 class BattleResultScreen extends StatelessWidget {
   final String roomId;
@@ -9,130 +9,76 @@ class BattleResultScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final me = FirebaseAuth.instance.currentUser!;
-    final color = Theme.of(context).colorScheme;
+    final uid = FirebaseAuth.instance.currentUser!.uid;
 
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: BattleService.instance.watchRoom(roomId),
-      builder: (context, snap) {
-        if (!snap.hasData) {
-          return Scaffold(
-            appBar: AppBar(title: const Text('Kết quả thi đấu')),
-            body: const Center(child: CircularProgressIndicator()),
-          );
-        }
+    return Scaffold(
+      appBar: AppBar(title: const Text('Kết quả thi đấu ⚔️')),
+      body: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        future: FirebaseFirestore.instance.collection('duel_rooms').doc(roomId).get(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-        final data = snap.data!.data();
-        if (data == null) {
-          return Scaffold(
-            appBar: AppBar(title: const Text('Kết quả thi đấu')),
-            body: const Center(child: Text('Phòng không tồn tại!')),
-          );
-        }
+          final data = snapshot.data!.data();
+          if (data == null) return const Center(child: Text('Không tìm thấy dữ liệu'));
 
-        final status = (data['status'] ?? 'waiting') as String;
-        if (status != 'finished') {
-          return Scaffold(
-            appBar: AppBar(title: const Text('Kết quả thi đấu')),
-            body: const Center(child: Text('⏳ Chờ đối thủ hoàn thành...')),
-          );
-        }
+          final topic = data['topic'] ?? 'Chưa rõ';
+          final p1Email = data['player1Email'] ?? 'Người chơi 1';
+          final p2Email = data['player2Email'] ?? 'Người chơi 2';
+          final s1 = data['player1Score'] ?? 0;
+          final s2 = data['player2Score'] ?? 0;
+          final p1 = data['player1'];
+          final p2 = data['player2'];
+          final winner = data['winner'];
 
-        // finalize nếu chưa finalize
-        if (data['finalized'] != true) {
-          // fire-and-forget
-          BattleService.instance.finalizeAndRank(roomId);
-        }
+          String resultText;
+          Color resultColor;
 
-        final String? p1 = data['player1'];
-        final String? p2 = data['player2'];
-        final int s1 = (data['player1Score'] ?? 0) as int;
-        final int s2 = (data['player2Score'] ?? 0) as int;
-        final String? winner = data['winner'];
+          if (winner == null) {
+            resultText = '🤝 Trận đấu kết thúc: HÒA';
+            resultColor = Colors.amber;
+          } else if (winner == uid) {
+            resultText = '🏆 Bạn THẮNG!';
+            resultColor = Colors.green;
+          } else {
+            resultText = '😢 Bạn THUA';
+            resultColor = Colors.redAccent;
+          }
 
-        String title;
-        Color titleColor;
-
-        if (winner == null) {
-          title = '🤝 Hòa!';
-          titleColor = Colors.amber;
-        } else if (winner == me.uid) {
-          title = '🏆 Bạn thắng!';
-          titleColor = Colors.green;
-        } else {
-          title = '😢 Bạn thua';
-          titleColor = Colors.redAccent;
-        }
-
-        final topic = (data['topic'] ?? '').toString();
-        final p1Email = (data['player1Email'] ?? 'Người chơi 1').toString();
-        final p2Email = (data['player2Email'] ?? 'Người chơi 2').toString();
-
-        return Scaffold(
-          appBar: AppBar(title: const Text('Kết quả thi đấu')),
-          body: Center(
+          return Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(title,
+                  Text(resultText,
                       style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: titleColor,
-                      )),
-                  const SizedBox(height: 10),
-                  if (topic.isNotEmpty)
-                    Text('Chủ đề: $topic',
-                        style: const TextStyle(fontSize: 16)),
-                  const SizedBox(height: 12),
-                  _ScoreRow(label: p1Email, score: s1),
-                  _ScoreRow(label: p2Email, score: s2),
+                          color: resultColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 24)),
                   const SizedBox(height: 20),
+                  Text('Chủ đề: $topic', style: const TextStyle(fontSize: 18)),
+                  const SizedBox(height: 10),
+                  Text('$p1Email: $s1 điểm'),
+                  Text('$p2Email: $s2 điểm'),
+                  const SizedBox(height: 30),
                   ElevatedButton.icon(
                     icon: const Icon(Icons.home),
-                    label: const Text('Về trang chủ'),
-                    onPressed: () => Navigator.popUntil(context, (r) => r.isFirst),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: color.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-                    ),
+                    label: const Text("Về trang chủ"),
+                    onPressed: () {
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(builder: (_) => const HomeScreen()),
+                            (route) => false,
+                      );
+                    },
                   ),
                 ],
               ),
             ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _ScoreRow extends StatelessWidget {
-  final String label;
-  final int score;
-  const _ScoreRow({required this.label, required this.score});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Flexible(
-            child: Text(label,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-          ),
-          const SizedBox(width: 8),
-          Text(':  $score',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              )),
-        ],
+          );
+        },
       ),
     );
   }
