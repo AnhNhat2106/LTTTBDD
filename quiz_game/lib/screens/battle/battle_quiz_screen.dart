@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/battle_service.dart';
+import 'battle_result_screen.dart';
 
 class BattleQuizScreen extends StatefulWidget {
   final String roomId;
@@ -44,7 +46,12 @@ class _BattleQuizScreenState extends State<BattleQuizScreen> {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => _WaitingResultScreen(roomId: widget.roomId),
+        builder: (_) => _WaitingResultScreen(
+          roomId: widget.roomId,
+          myScore: score,
+          myTotal: widget.questionList.length,
+          topic: widget.topicKey,
+        ),
       ),
     );
   }
@@ -53,7 +60,7 @@ class _BattleQuizScreenState extends State<BattleQuizScreen> {
   Widget build(BuildContext context) {
     final q = widget.questionList[currentIndex];
     return Scaffold(
-      appBar: AppBar(title: Text('PvP - ${widget.topicKey}')),
+      appBar: AppBar(title: Text('Thi đấu - ${widget.topicKey}')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -82,10 +89,22 @@ class _BattleQuizScreenState extends State<BattleQuizScreen> {
 
 class _WaitingResultScreen extends StatelessWidget {
   final String roomId;
-  const _WaitingResultScreen({required this.roomId, super.key});
+  final int myScore;
+  final int myTotal;
+  final String topic;
+
+  const _WaitingResultScreen({
+    required this.roomId,
+    required this.myScore,
+    required this.myTotal,
+    required this.topic,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final currentUid = FirebaseAuth.instance.currentUser!.uid;
+
     return StreamBuilder(
       stream: BattleService.instance.watchRoom(roomId),
       builder: (context, snap) {
@@ -100,55 +119,67 @@ class _WaitingResultScreen extends StatelessWidget {
           return const Scaffold(body: Center(child: Text('Phòng không tồn tại')));
         }
 
-        final status = data['status'] as String? ?? 'waiting';
+        final status = (data['status'] as String?) ?? 'waiting';
         if (status != 'finished') {
           return const Scaffold(
-            body: Center(child: Text('⏳ Chờ đối thủ hoàn thành...')),
+            body: Center(child: Text('⏳ Đang chờ đối thủ hoàn thành...')),
           );
         }
 
-        // ✅ Tránh xử lý trùng
-        if (data['finalized'] != true) {
+        // Chỉ player1 finalize để tránh xử lý trùng
+        final p1 = (data['player1'] as Map?)?['uid'];
+        if (data['finalized'] != true && currentUid == p1) {
           BattleService.instance.finalizeAndRank(roomId);
         }
 
-        final scores = Map<String, dynamic>.from(data['scores'] ?? {});
-        final p1 = (data['player1'] as Map?)?['uid'];
         final p2 = (data['player2'] as Map?)?['uid'];
+        final p1Email = (data['player1'] as Map?)?['email'] ?? 'Người chơi 1';
+        final p2Email = (data['player2'] as Map?)?['email'] ?? 'Người chơi 2';
 
+        final scores = Map<String, dynamic>.from(data['scores'] ?? {});
         final s1 = p1 != null ? (scores[p1]?['score'] ?? 0) : 0;
         final t1 = p1 != null ? (scores[p1]?['total'] ?? 0) : 0;
         final s2 = p2 != null ? (scores[p2]?['score'] ?? 0) : 0;
         final t2 = p2 != null ? (scores[p2]?['total'] ?? 0) : 0;
 
-        String label = '🎯 Hoà!';
-        if (s1 > s2) label = '🏆 Người chơi 1 thắng!';
-        if (s2 > s1) label = '🏆 Người chơi 2 thắng!';
+        // ✅ Tự quyết định thắng/thua ngay từ điểm số để 2 máy đồng nhất
+        String? winnerFromScores;
+        if (s1 > s2) winnerFromScores = p1;
+        if (s2 > s1) winnerFromScores = p2; // nếu bằng nhau => null (hòa)
 
-        return Scaffold(
-          appBar: AppBar(title: const Text('Kết quả PvP')),
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(label,
-                      style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  Text('Người chơi 1: $s1 / $t1'),
-                  Text('Người chơi 2: $s2 / $t2'),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () =>
-                        Navigator.popUntil(context, (r) => r.isFirst),
-                    child: const Text('🏠 Về Trang chủ'),
-                  ),
-                ],
+        final bool? isMeWinner = (winnerFromScores == null)
+            ? null
+            : (winnerFromScores == currentUid);
+
+        // Map dữ liệu theo phía người chơi hiện tại
+        final myIsP1 = currentUid == p1;
+        final myEmail = myIsP1 ? p1Email : p2Email;
+        final oppEmail = myIsP1 ? p2Email : p1Email;
+        final myScoreFinal = myIsP1 ? s1 : s2;
+        final oppScoreFinal = myIsP1 ? s2 : s1;
+        final oppTotalFinal = myIsP1 ? t2 : t1;
+
+        // Điều hướng sang màn kết quả riêng cho PvP
+        Future.microtask(() {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => BattleResultScreen(
+                topic: topic,
+                myEmail: myEmail,
+                oppEmail: oppEmail,
+                myScore: myScoreFinal,
+                oppScore: oppScoreFinal,
+                myTotal: myTotal,
+                oppTotal: oppTotalFinal,
+                isMeWinner: isMeWinner,
               ),
             ),
-          ),
+          );
+        });
+
+        return const Scaffold(
+          body: Center(child: Text('🎯 Đang tổng hợp kết quả...')),
         );
       },
     );
