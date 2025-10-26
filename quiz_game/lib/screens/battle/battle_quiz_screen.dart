@@ -52,6 +52,7 @@ class _BattleQuizScreenState extends State<BattleQuizScreen> {
       MaterialPageRoute(
         builder: (_) => _WaitingResultScreen(
           roomId: widget.roomId,
+          total: widget.questionList.length,
         ),
       ),
     );
@@ -67,8 +68,10 @@ class _BattleQuizScreenState extends State<BattleQuizScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Câu ${currentIndex + 1}/${widget.questionList.length}',
-                style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              'Câu ${currentIndex + 1}/${widget.questionList.length}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 16),
             Text(q['question'], style: const TextStyle(fontSize: 18)),
             const SizedBox(height: 16),
@@ -90,7 +93,8 @@ class _BattleQuizScreenState extends State<BattleQuizScreen> {
 
 class _WaitingResultScreen extends StatelessWidget {
   final String roomId;
-  const _WaitingResultScreen({super.key, required this.roomId});
+  final int total;
+  const _WaitingResultScreen({super.key, required this.roomId, required this.total});
 
   @override
   Widget build(BuildContext context) {
@@ -125,11 +129,35 @@ class _WaitingResultScreen extends StatelessWidget {
           }
         }
 
-        // ✅ Khi cả hai hoàn tất, chuyển sang màn kết quả PvP
+        // ✅ Lấy dữ liệu người chơi và điểm số
+        final p1 = data['player1'];
+        final p2 = data['player2'];
+        final p1Email = data['player1Email'] ?? 'Người chơi 1';
+        final p2Email = data['player2Email'] ?? 'Người chơi 2';
+        final s1 = data['player1Score'] ?? 0;
+        final s2 = data['player2Score'] ?? 0;
+        final winner = data['winner'];
+        final topic = data['topic'] ?? '';
+
+        final bool? isMeWinner = (winner == null)
+            ? null
+            : (winner == currentUid ? true : false);
+
         Future.microtask(() {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => BattleResultScreen(roomId: roomId)),
+            MaterialPageRoute(
+              builder: (_) => BattleResultScreen(
+                topic: topic,
+                myEmail: currentUid == p1 ? p1Email : p2Email,
+                oppEmail: currentUid == p1 ? p2Email : p1Email,
+                myScore: currentUid == p1 ? s1 : s2,
+                oppScore: currentUid == p1 ? s2 : s1,
+                myTotal: total,
+                oppTotal: total,
+                isMeWinner: isMeWinner,
+              ),
+            ),
           );
         });
 

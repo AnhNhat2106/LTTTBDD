@@ -1,10 +1,10 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import '../ history/history_menu_screen.dart';
-import '../ history/history_menu_screen.dart';
 import '../../providers/theme_provider.dart';
+import '../ history/history_menu_screen.dart';
 import '../quiz/topic_screen.dart';
 import '../../services/auth_service.dart';
 import '../profile/profile_screen.dart';
@@ -49,12 +49,60 @@ class HomeScreen extends StatelessWidget {
             },
           ),
 
-          // 🚪 Đăng xuất
+          // 🚪 Đăng xuất (có xác nhận)
           IconButton(
             tooltip: 'Đăng xuất',
             icon: const Icon(Icons.logout),
             onPressed: () async {
-              await AuthService().signOut();
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (context) {
+                  return BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+                    child: AlertDialog(
+                      backgroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      title: Row(
+                        children: const [
+                          Icon(Icons.warning_amber_rounded,
+                              color: Colors.orange, size: 28),
+                          SizedBox(width: 10),
+                          Text('Xác nhận đăng xuất'),
+                        ],
+                      ),
+                      content: const Text(
+                        'Bạn có chắc chắn muốn đăng xuất không?',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      actions: [
+                        TextButton(
+                          child: const Text(
+                            'Hủy',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                          onPressed: () => Navigator.pop(context, false),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.redAccent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Đăng xuất'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+
+              if (confirm == true) {
+                await AuthService().signOut();
+              }
             },
           ),
         ],
@@ -130,83 +178,75 @@ class HomeScreen extends StatelessWidget {
                   const SizedBox(height: 32),
 
                   // ▶️ Luyện tập quiz
-                  Builder(
-                    builder: (context) => ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 48),
-                      ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const TopicScreen(),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('Luyện tập Quiz'),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
                     ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const TopicScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Luyện tập Quiz'),
                   ),
                   const SizedBox(height: 16),
 
                   // ⚔️ Thi đấu xếp hạng
-                  Builder(
-                    builder: (context) => ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orangeAccent,
-                        minimumSize: const Size(double.infinity, 48),
-                      ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const DuelScreen(),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.sports_esports),
-                      label: const Text('Thi đấu xếp hạng'),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orangeAccent,
+                      minimumSize: const Size(double.infinity, 48),
                     ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const DuelScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.sports_esports),
+                    label: const Text('Thi đấu xếp hạng'),
                   ),
                   const SizedBox(height: 16),
 
                   // 🏆 Bảng xếp hạng
-                  Builder(
-                    builder: (context) => OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 48),
-                      ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const RankScreen(),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.leaderboard),
-                      label: const Text('Bảng xếp hạng'),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
                     ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const RankScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.leaderboard),
+                    label: const Text('Bảng xếp hạng'),
                   ),
                   const SizedBox(height: 16),
 
-                  // 📜 Lịch sử Quiz (menu chọn loại)
-                  Builder(
-                    builder: (context) => OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 48),
-                      ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const HistoryMenuScreen(),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.history),
-                      label: const Text('Lịch sử Quiz'),
+                  // 📜 Lịch sử Quiz
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
                     ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const HistoryMenuScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.history),
+                    label: const Text('Lịch sử Quiz'),
                   ),
                 ],
               ),
