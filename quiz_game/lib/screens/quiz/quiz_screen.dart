@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math'; // 🔹 thêm dòng này
 import 'package:flutter/material.dart';
 import '../../services/quiz_service.dart';
 import 'result_screen.dart';
@@ -33,6 +34,12 @@ class _QuizScreenState extends State<QuizScreen> {
   @override
   void initState() {
     super.initState();
+
+    // 🔹 Nếu là chế độ luyện tập thì random thứ tự câu hỏi
+    if (!widget.isDuel) {
+      widget.questionList.shuffle(Random());
+    }
+
     _startTimer();
   }
 

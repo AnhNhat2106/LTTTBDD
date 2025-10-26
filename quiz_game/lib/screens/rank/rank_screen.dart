@@ -20,7 +20,7 @@ class RankScreen extends StatelessWidget {
         stream: FirebaseFirestore.instance
             .collection('users')
             .orderBy('rankPoints', descending: true)
-            .limit(20)
+            .limit(50)
             .snapshots(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {

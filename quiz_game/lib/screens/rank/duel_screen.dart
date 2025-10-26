@@ -56,6 +56,7 @@ class _DuelScreenState extends State<DuelScreen> {
         .get();
 
     if (waiting.docs.isNotEmpty) {
+      // Tham gia phòng có sẵn
       final room = waiting.docs.first;
       _roomId = room.id;
       _iCreated = false;
@@ -69,6 +70,7 @@ class _DuelScreenState extends State<DuelScreen> {
       _listenToRoom(room.id);
       setState(() => statusText = '🥳 Đã ghép đối thủ, chờ xác nhận...');
     } else {
+      // Tạo phòng mới
       final newRoom = await _db.collection('duel_rooms').add({
         'topic': selectedTopic,
         'player1': user.uid,
@@ -181,6 +183,10 @@ class _DuelScreenState extends State<DuelScreen> {
 
             await _tryFinishMatch(roomId);
           }
+
+          if (status == 'finished' && mounted) {
+            _showResult(data);
+          }
         });
   }
 
@@ -193,7 +199,7 @@ class _DuelScreenState extends State<DuelScreen> {
 
     final s1 = room['player1Score'];
     final s2 = room['player2Score'];
-    if (s1 == null || s2 == null) return;
+    if (s1 == null || s2 == null) return; // 1 người chưa xong → chờ tiếp
 
     String? winner;
     if (s1 > s2) winner = room['player1'];
@@ -202,61 +208,80 @@ class _DuelScreenState extends State<DuelScreen> {
     final uid1 = room['player1'] as String;
     final uid2 = room['player2'] as String?;
 
-    await _db.runTransaction((trx) async {
-      final u1 = await trx.get(_db.collection('users').doc(uid1));
-      if (u1.exists) {
-        int rp = (u1.data()?['rankPoints'] ?? 0) as int;
-        int w = (u1.data()?['wins'] ?? 0) as int;
-        int l = (u1.data()?['losses'] ?? 0) as int;
-        if (winner == uid1) {
-          rp += 10;
-          w += 1;
-        } else if (winner == null) {
+    try {
+      await _db.runTransaction((trx) async {
+        final u1ref = _db.collection('users').doc(uid1);
+        final u2ref =
+        (uid2 != null) ? _db.collection('users').doc(uid2) : null;
+
+        Map<String, dynamic> inc1 = {};
+        Map<String, dynamic> inc2 = {};
+
+        if (winner == null) {
+          inc1 = {'rankPoints': FieldValue.increment(2)};
+          inc2 = {'rankPoints': FieldValue.increment(2)};
+        } else if (winner == uid1) {
+          inc1 = {
+            'rankPoints': FieldValue.increment(10),
+            'wins': FieldValue.increment(1),
+          };
+          inc2 = {
+            'rankPoints': FieldValue.increment(-5),
+            'losses': FieldValue.increment(1),
+          };
         } else {
-          rp -= 5;
-          l += 1;
+          inc1 = {
+            'rankPoints': FieldValue.increment(-5),
+            'losses': FieldValue.increment(1),
+          };
+          inc2 = {
+            'rankPoints': FieldValue.increment(10),
+            'wins': FieldValue.increment(1),
+          };
         }
-        trx.update(u1.reference, {'rankPoints': rp, 'wins': w, 'losses': l});
-      }
 
-      if (uid2 != null) {
-        final u2ref = _db.collection('users').doc(uid2);
-        final u2 = await trx.get(u2ref);
-        if (u2.exists) {
-          int rp = (u2.data()?['rankPoints'] ?? 0) as int;
-          int w = (u2.data()?['wins'] ?? 0) as int;
-          int l = (u2.data()?['losses'] ?? 0) as int;
-          if (winner == uid2) {
-            rp += 10;
-            w += 1;
-          } else if (winner == null) {
-          } else {
-            rp -= 5;
-            l += 1;
-          }
-          trx.update(u2ref, {'rankPoints': rp, 'wins': w, 'losses': l});
-        }
-      }
+        trx.set(u1ref, inc1, SetOptions(merge: true));
+        if (u2ref != null) trx.set(u2ref, inc2, SetOptions(merge: true));
 
-      trx.update(ref, {
+        trx.update(ref, {
+          'status': 'finished',
+          'winner': winner,
+          'finishedAt': FieldValue.serverTimestamp(),
+        });
+      });
+    } catch (e) {
+      await ref.update({
         'status': 'finished',
         'winner': winner,
         'finishedAt': FieldValue.serverTimestamp(),
       });
-    });
+      debugPrint('Finalize duel fallback: $e');
+    }
 
     if (!mounted) return;
-    final isMeWinner = (winner == null) ? null : (winner == user.uid);
+    _showResult(room);
+  }
+
+  void _showResult(Map<String, dynamic> room) async {
+    if (!mounted) return;
+
+    final s1 = room['player1Score'] ?? 0;
+    final s2 = room['player2Score'] ?? 0;
+    final topic = (room['topic'] ?? 'Không rõ') as String;
+    final total = (topics[topic]?.length ?? 10);
+
+    final winner = room['winner'];
+    final isMeWinner = (winner == null)
+        ? null
+        : (winner == FirebaseAuth.instance.currentUser?.uid);
+
     final msg = (isMeWinner == null)
         ? '🤝 Trận đấu kết thúc: HOÀ'
         : (isMeWinner
         ? '🏆 Bạn THẮNG! +10 điểm rank'
         : '😢 Bạn THUA -5 điểm rank');
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
-    // ✅ Mở ResultScreen sau khi cập nhật điểm
-    final topic = (room['topic'] ?? 'Không rõ') as String;
-    final total = (topics[topic]?.length ?? 10);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
     await Future.delayed(const Duration(milliseconds: 800));
 
@@ -265,9 +290,7 @@ class _DuelScreenState extends State<DuelScreen> {
       MaterialPageRoute(
         builder: (_) => ResultScreen(
           topicKey: topic,
-          score: (room['player1'] == user.uid)
-              ? (room['player1Score'] ?? 0)
-              : (room['player2Score'] ?? 0),
+          score: (room['player1'] == user.uid) ? s1 : s2,
           total: total,
         ),
       ),
@@ -320,8 +343,7 @@ class _DuelScreenState extends State<DuelScreen> {
                         : 'Tìm đối thủ'),
                     onPressed: isSearching ? null : _findOpponent,
                     style: ElevatedButton.styleFrom(
-                      padding:
-                      const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                       textStyle: const TextStyle(fontSize: 16),
                     ),
                   ),
@@ -333,8 +355,7 @@ class _DuelScreenState extends State<DuelScreen> {
                     label: const Text('Hủy'),
                     onPressed: isSearching ? _cancelSearch : null,
                     style: OutlinedButton.styleFrom(
-                      padding:
-                      const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                       textStyle: const TextStyle(fontSize: 16),
                     ),
                   ),

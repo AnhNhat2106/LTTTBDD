@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import '../../services/quiz_service.dart';
 
 class DuelHistoryScreen extends StatelessWidget {
   const DuelHistoryScreen({super.key});
@@ -21,7 +20,14 @@ class DuelHistoryScreen extends StatelessWidget {
         elevation: 2,
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: QuizService.getUserDuelHistory(),
+        stream: FirebaseFirestore.instance
+            .collection('battle_results')
+            .where(Filter.or(
+          Filter('p1.uid', isEqualTo: me.uid),
+          Filter('p2.uid', isEqualTo: me.uid),
+        ))
+            .orderBy('createdAt', descending: true)
+            .snapshots(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -44,25 +50,24 @@ class DuelHistoryScreen extends StatelessWidget {
             itemBuilder: (context, i) {
               final data = docs[i].data();
               final topic = (data['topic'] ?? 'Không rõ').toString();
-              final p1Email = (data['player1Email'] ?? 'Người chơi 1').toString();
-              final p2Email = (data['player2Email'] ?? 'Người chơi 2').toString();
-              final s1 = data['player1Score'] ?? 0;
-              final s2 = data['player2Score'] ?? 0;
-              final winner = data['winner'];
-              final ts = data['finishedAt'];
-              final finishedAt =
-              (ts is Timestamp) ? DateFormat('dd/MM/yyyy HH:mm').format(ts.toDate()) : '';
+              final p1 = data['p1'] ?? {};
+              final p2 = data['p2'] ?? {};
+              final s1 = (p1['score'] ?? 0) as int;
+              final s2 = (p2['score'] ?? 0) as int;
+              final t1 = (p1['total'] ?? 0) as int;
+              final t2 = (p2['total'] ?? 0) as int;
+              final winner = data['winnerUid'];
+              final ts = data['createdAt'];
+              final finishedAt = (ts is Timestamp)
+                  ? DateFormat('dd/MM/yyyy HH:mm').format(ts.toDate())
+                  : '';
 
-              // Xác định kết quả của người chơi hiện tại
-              final iAmWinner = (winner == null)
+              final bool? iAmWinner = winner == null
                   ? null
-                  : (winner == me.uid
-                  ? true
-                  : (winner != me.uid ? false : null));
+                  : (winner == me.uid ? true : false);
 
               final Color statusColor;
               final String statusText;
-
               if (iAmWinner == null) {
                 statusColor = Colors.grey;
                 statusText = 'Hoà';
@@ -78,7 +83,9 @@ class DuelHistoryScreen extends StatelessWidget {
                 color: color.surface,
                 elevation: 3,
                 shadowColor: statusColor.withOpacity(.3),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
@@ -94,13 +101,11 @@ class DuelHistoryScreen extends StatelessWidget {
                     ),
                   ),
                   child: ListTile(
-                    contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    leading: _ScoreBadge(
-                      s1: s1,
-                      s2: s2,
-                      color: statusColor,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
                     ),
+                    leading: _ScoreBadge(s1: s1, s2: s2, color: statusColor),
                     title: Text(
                       'Chủ đề: $topic',
                       style: theme.textTheme.titleMedium?.copyWith(
@@ -111,7 +116,11 @@ class DuelHistoryScreen extends StatelessWidget {
                       ),
                     ),
                     subtitle: Text(
-                      '$p1Email: $s1 điểm\n$p2Email: $s2 điểm\n$finishedAt',
+                      'Bạn: ${me.uid == p1['uid'] ? s1 : s2}/'
+                          '${me.uid == p1['uid'] ? t1 : t2} điểm\n'
+                          'Đối thủ: ${me.uid == p1['uid'] ? s2 : s1}/'
+                          '${me.uid == p1['uid'] ? t2 : t1} điểm\n'
+                          'Ngày: $finishedAt',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.brightness == Brightness.dark
                             ? Colors.white70

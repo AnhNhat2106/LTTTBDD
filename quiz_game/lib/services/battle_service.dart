@@ -8,7 +8,7 @@ class BattleService {
   final _db = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
-  /// 🔹 Tạo phòng chờ theo topic
+  /// 🔹 Tạo phòng chờ theo chủ đề
   Future<String> createRoom({required String topic}) async {
     final u = _auth.currentUser!;
     final doc = await _db.collection('rooms').add({
@@ -72,7 +72,7 @@ class BattleService {
     });
   }
 
-  /// 🔹 Lắng nghe thay đổi phòng
+  /// 🔹 Lắng nghe phòng theo thời gian thực
   Stream<DocumentSnapshot<Map<String, dynamic>>> watchRoom(String roomId) {
     return _db.collection('rooms').doc(roomId).snapshots();
   }
@@ -91,18 +91,17 @@ class BattleService {
       if (!snap.exists) return;
       final data = snap.data()!;
 
-      // Lấy dữ liệu điểm cũ (nếu có)
+      // Lưu điểm người chơi hiện tại
       final scores = Map<String, dynamic>.from(data['scores'] ?? {});
       scores[u.uid] = {'score': score, 'total': total};
-
       tx.update(ref, {'scores': scores});
 
+      // Nếu cả 2 người đều đã nộp điểm → kết thúc trận
       final p1 = (data['player1'] as Map?)?['uid'];
       final p2 = (data['player2'] as Map?)?['uid'];
       final haveP1 = p1 != null && scores[p1] != null;
       final haveP2 = p2 != null && scores[p2] != null;
 
-      // ✅ Nếu cả 2 đã có điểm -> kết thúc phòng
       if (haveP1 && haveP2) {
         tx.update(ref, {
           'status': 'finished',
@@ -114,7 +113,7 @@ class BattleService {
     });
   }
 
-  /// 🔹 Tổng kết trận đấu và cộng/trừ Rank
+  /// 🔹 Tổng kết & cập nhật Rank + lưu lịch sử trận
   Future<void> finalizeAndRank(String roomId) async {
     final ref = _db.collection('rooms').doc(roomId);
     final room = await ref.get();
@@ -122,7 +121,7 @@ class BattleService {
 
     final data = room.data()!;
     if (data['status'] != 'finished') return;
-    if (data['finalized'] == true) return; // tránh trùng xử lý
+    if (data['finalized'] == true) return; // tránh xử lý 2 lần
 
     final topic = data['topic'];
     final p1 = (data['player1'] as Map?)?['uid'];
@@ -131,10 +130,10 @@ class BattleService {
     if (p1 == null || p2 == null) return;
     if (scores[p1] == null || scores[p2] == null) return;
 
-    final s1 = scores[p1]['score'] as int;
-    final t1 = scores[p1]['total'] as int;
-    final s2 = scores[p2]['score'] as int;
-    final t2 = scores[p2]['total'] as int;
+    final s1 = (scores[p1]['score'] ?? 0) as int;
+    final t1 = (scores[p1]['total'] ?? 0) as int;
+    final s2 = (scores[p2]['score'] ?? 0) as int;
+    final t2 = (scores[p2]['total'] ?? 0) as int;
 
     String? winner;
     String result = 'draw';
@@ -146,44 +145,62 @@ class BattleService {
       result = 'p2_win';
     }
 
-    // Lưu lịch sử trận đấu
+    // ✅ Lưu lịch sử trận đấu (đây là phần giúp hiển thị trong DuelHistoryScreen)
     await _db.collection('battle_results').add({
       'roomId': roomId,
       'topic': topic,
-      'p1': {'uid': p1, 'score': s1, 'total': t1},
-      'p2': {'uid': p2, 'score': s2, 'total': t2},
-      'winnerUid': winner,
-      'result': result,
-      'createdAt': FieldValue.serverTimestamp(),
+      'player1Email': data['player1']?['email'],
+      'player2Email': data['player2']?['email'],
+      'player1Score': s1,
+      'player2Score': s2,
+      'winner': winner,
+      'status': 'finished',
+      'finishedAt': FieldValue.serverTimestamp(),
     });
 
-    // Cộng/trừ Rank
+    print('✅ Đã lưu lịch sử trận $roomId vào battle_results');
+
+    // Cập nhật Rank
     final p1Ref = _db.collection('users').doc(p1);
     final p2Ref = _db.collection('users').doc(p2);
 
-    if (winner == null) {
-      await p1Ref.update({'rankPoints': FieldValue.increment(2)});
-      await p2Ref.update({'rankPoints': FieldValue.increment(2)});
-    } else if (winner == p1) {
-      await p1Ref.update({
-        'rankPoints': FieldValue.increment(10),
-        'wins': FieldValue.increment(1),
-      });
-      await p2Ref.update({
-        'rankPoints': FieldValue.increment(-5),
-        'losses': FieldValue.increment(1),
-      });
-    } else {
-      await p2Ref.update({
-        'rankPoints': FieldValue.increment(10),
-        'wins': FieldValue.increment(1),
-      });
-      await p1Ref.update({
-        'rankPoints': FieldValue.increment(-5),
-        'losses': FieldValue.increment(1),
-      });
-    }
+    try {
+      await _db.runTransaction((trx) async {
+        if (winner == null) {
+          // Hòa
+          trx.set(p1Ref, {
+            'rankPoints': FieldValue.increment(2),
+          }, SetOptions(merge: true));
+          trx.set(p2Ref, {
+            'rankPoints': FieldValue.increment(2),
+          }, SetOptions(merge: true));
+        } else if (winner == p1) {
+          // P1 thắng
+          trx.set(p1Ref, {
+            'rankPoints': FieldValue.increment(10),
+            'wins': FieldValue.increment(1),
+          }, SetOptions(merge: true));
+          trx.set(p2Ref, {
+            'rankPoints': FieldValue.increment(-5),
+            'losses': FieldValue.increment(1),
+          }, SetOptions(merge: true));
+        } else {
+          // P2 thắng
+          trx.set(p2Ref, {
+            'rankPoints': FieldValue.increment(10),
+            'wins': FieldValue.increment(1),
+          }, SetOptions(merge: true));
+          trx.set(p1Ref, {
+            'rankPoints': FieldValue.increment(-5),
+            'losses': FieldValue.increment(1),
+          }, SetOptions(merge: true));
+        }
 
-    await ref.update({'finalized': true}); // ✅ đánh dấu đã xử lý
+        trx.update(ref, {'finalized': true});
+      });
+    } catch (e) {
+      print('⚠️ finalizeAndRank lỗi: $e');
+      await ref.update({'finalized': true});
+    }
   }
 }
