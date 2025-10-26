@@ -3,13 +3,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../ history/history_menu_screen.dart';
+import '../ history/history_menu_screen.dart';
 import '../../providers/theme_provider.dart';
 import '../quiz/topic_screen.dart';
 import '../../services/auth_service.dart';
 import '../profile/profile_screen.dart';
 import '../rank/rank_screen.dart';
 import '../rank/duel_screen.dart';
-import '../history/history_menu_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});

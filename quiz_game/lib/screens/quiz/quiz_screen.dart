@@ -1,13 +1,13 @@
 import 'dart:async';
-import 'dart:math'; // 🔹 thêm dòng này
+import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../services/quiz_service.dart';
-import 'result_screen.dart';
+import '../quiz/result_screen.dart';
 
 class QuizScreen extends StatefulWidget {
   final String topicKey;
   final List<Map<String, dynamic>> questionList;
-  final bool isDuel;
+  final bool isDuel; // true = thi đấu, false = luyện tập
 
   const QuizScreen({
     super.key,
@@ -23,6 +23,7 @@ class QuizScreen extends StatefulWidget {
 class _QuizScreenState extends State<QuizScreen> {
   static const int perQuestionSeconds = 15;
 
+  late final List<Map<String, dynamic>> _questions; // đã shuffle thứ tự
   int currentIndex = 0;
   int score = 0;
   int? selectedIndex;
@@ -34,11 +35,9 @@ class _QuizScreenState extends State<QuizScreen> {
   @override
   void initState() {
     super.initState();
-
-    // 🔹 Nếu là chế độ luyện tập thì random thứ tự câu hỏi
-    if (!widget.isDuel) {
-      widget.questionList.shuffle(Random());
-    }
+    // 🔀 Random thứ tự câu hỏi, KHÔNG đổi thứ tự options để không sai index answer
+    _questions = List<Map<String, dynamic>>.from(widget.questionList);
+    _questions.shuffle(Random());
 
     _startTimer();
   }
@@ -69,96 +68,89 @@ class _QuizScreenState extends State<QuizScreen> {
         isAnswered = true;
         selectedIndex = null;
       });
-      await Future.delayed(const Duration(milliseconds: 600));
+      await Future.delayed(const Duration(milliseconds: 500));
     }
     _goNextOrFinish();
   }
 
-  void checkAnswer(int index) async {
-    if (isAnswered) return;
-    final correctIndex = widget.questionList[currentIndex]['answer'];
-    setState(() {
-      selectedIndex = index;
-      isAnswered = true;
-      if (index == correctIndex) score++;
-    });
-    await Future.delayed(const Duration(milliseconds: 900));
-    _goNextOrFinish();
-  }
-
   Future<void> _goNextOrFinish() async {
-    if (currentIndex < widget.questionList.length - 1) {
+    if (currentIndex < _questions.length - 1) {
       setState(() {
         currentIndex++;
         isAnswered = false;
         selectedIndex = null;
       });
       _startTimer();
-    } else {
-      _timer?.cancel();
-
-      // PvE – Lưu lịch sử
-      if (!widget.isDuel) {
-        await QuizService.saveQuizResult(
-          topic: widget.topicKey,
-          score: score,
-          total: widget.questionList.length,
-        );
-      }
-
-      // PvP – Gửi điểm về DuelScreen
-      if (widget.isDuel) {
-        if (mounted) Navigator.pop(context, score);
-        return;
-      }
-
-      // Hiển thị kết quả cá nhân
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ResultScreen(
-              topicKey: widget.topicKey,
-              score: score,
-              total: widget.questionList.length,
-            ),
-          ),
-        );
-      }
+      return;
     }
+
+    // Hết câu hỏi
+    _timer?.cancel();
+
+    if (widget.isDuel) {
+      // PvP: trả điểm về màn hình gọi
+      if (mounted) Navigator.pop(context, score);
+      return;
+    }
+
+    // PvE: lưu lịch sử + mở ResultScreen
+    await QuizService.saveQuizResult(
+      topic: widget.topicKey,
+      score: score,
+      total: _questions.length,
+    );
+
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ResultScreen(
+          topicKey: widget.topicKey,
+          score: score,
+          total: _questions.length,
+        ),
+      ),
+    );
+  }
+
+  void checkAnswer(int index) async {
+    if (isAnswered) return;
+    final correctIndex = _questions[currentIndex]['answer'];
+    setState(() {
+      selectedIndex = index;
+      isAnswered = true;
+      if (index == correctIndex) score++;
+    });
+    await Future.delayed(const Duration(milliseconds: 800));
+    _goNextOrFinish();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = theme.colorScheme;
-    final question = widget.questionList[currentIndex];
-    final total = widget.questionList.length;
+
+    final question = _questions[currentIndex];
+    final total = _questions.length;
     final progress = (currentIndex + 1) / total;
     final correctIndex = question['answer'];
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text("Quiz - ${widget.topicKey}"),
+        title: Text(widget.isDuel ? 'Thi đấu - ${widget.topicKey}' : 'Quiz - ${widget.topicKey}'),
         backgroundColor: color.primary,
-        elevation: 2,
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Center(
-              child: Row(
-                children: [
-                  const Icon(Icons.timer, size: 18),
-                  const SizedBox(width: 6),
-                  Text(
-                    '$remain s',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
+            child: Row(
+              children: [
+                const Icon(Icons.timer, size: 18),
+                const SizedBox(width: 6),
+                Text('$remain s', style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
             ),
-          )
+          ),
         ],
       ),
       body: Padding(
@@ -195,9 +187,8 @@ class _QuizScreenState extends State<QuizScreen> {
 
               if (isAnswered) {
                 if (index == correctIndex) {
-                  btnColor = Colors.green.shade400;
-                } else if (index == selectedIndex &&
-                    selectedIndex != correctIndex) {
+                  btnColor = Colors.green.shade500;
+                } else if (index == selectedIndex && selectedIndex != correctIndex) {
                   btnColor = Colors.red.shade400;
                 } else {
                   btnColor = theme.brightness == Brightness.dark
@@ -215,22 +206,16 @@ class _QuizScreenState extends State<QuizScreen> {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: btnColor,
-                    foregroundColor: theme.brightness == Brightness.dark
-                        ? Colors.white
-                        : Colors.black87,
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 14, horizontal: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                    foregroundColor: theme.brightness == Brightness.dark ? Colors.white : Colors.black87,
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 2,
                   ),
                   onPressed: () => checkAnswer(index),
                   child: Text(
                     optionText,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w500),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                 ),
               );
